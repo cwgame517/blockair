@@ -3,3 +3,6 @@
 sourcemap.json
 .DS_Store
 __pycache__/
+
+# 각자 받은 Rojo 실행 파일
+rojo.exe

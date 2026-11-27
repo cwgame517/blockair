@@ -22,7 +22,9 @@ function IslandHUD.Mount(playerGui: Instance)
 
 	local panel = Instance.new("Frame")
 	panel.Size = UDim2.fromOffset(260, 84)
-	panel.Position = UDim2.fromOffset(16, 16)
+	-- 왼쪽 위는 로블록스 채팅창, 오른쪽 위는 순위표 자리라 가운데 위에 둔다
+	panel.AnchorPoint = Vector2.new(0.5, 0)
+	panel.Position = UDim2.new(0.5, 0, 0, 8)
 	panel.BackgroundColor3 = Widgets.PANEL
 	panel.BackgroundTransparency = 0.15
 	panel.Parent = gui
@@ -36,7 +38,7 @@ function IslandHUD.Mount(playerGui: Instance)
 	xpLabel = Widgets.label(panel, "0 / 100 XP", UDim2.fromOffset(232, 18), UDim2.fromOffset(14, 60), 13)
 	xpLabel.TextColor3 = Color3.fromRGB(180, 195, 220)
 
-	toast = Widgets.label(gui, "", UDim2.fromOffset(420, 48), UDim2.new(0.5, -210, 0, 120), 28)
+	toast = Widgets.label(gui, "", UDim2.fromOffset(420, 48), UDim2.new(0.5, -210, 0, 140), 28)
 	toast.TextXAlignment = Enum.TextXAlignment.Center
 	toast.TextColor3 = Widgets.GOLD
 	toast.TextTransparency = 1
