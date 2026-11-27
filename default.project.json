@@ -1,0 +1,22 @@
+{
+  "name": "BlockAir-Hub",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$className": "Folder",
+        "Main": { "$path": "src/server/Main.server.luau" },
+        "common": { "$path": "src/server/common" },
+        "place": { "$path": "src/server/hub" }
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    }
+  }
+}
