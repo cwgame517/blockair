@@ -40,10 +40,52 @@ local function shapeOf(frameId: string): any
 	return Shapes.byId[frameId] or Shapes.byId[Shapes.DEFAULT_DESIGN.frameId]
 end
 
--- 틀에 들어가는 모든 칸의 자리 목록 (대칭 복사 포함)
-function PlaneBuilder.layout(frameId: string, parts: { [string]: string }?): { Placed }
+-- 자유틀 칸 이름 "x,y,z" → 좌표 (잘못되면 nil)
+function PlaneBuilder.parseFreeKey(key: any): Vector3?
+	if type(key) ~= "string" then
+		return nil
+	end
+	local x, y, z = string.match(key, "^(-?%d+),(-?%d+),(-?%d+)$")
+	if not x then
+		return nil
+	end
+	return Vector3.new(tonumber(x) :: number, tonumber(y) :: number, tonumber(z) :: number)
+end
+
+function PlaneBuilder.freeKey(pos: Vector3): string
+	return `{math.round(pos.X)},{math.round(pos.Y)},{math.round(pos.Z)}`
+end
+
+function PlaneBuilder.isFree(design: any): boolean
+	local shape = Shapes.byId[design.frameId]
+	return shape ~= nil and (shape :: any).free == true
+end
+
+-- 틀에 들어가는 모든 칸의 자리 목록 (대칭 복사 포함).
+-- PlaneBuilder.layout(design) 처럼 설계를 통째로 줘도 된다 (자유틀은 설계의 free 칸을 읽어야 해서 이쪽을 쓴다).
+function PlaneBuilder.layout(frameOrDesign: any, parts: { [string]: string }?): { Placed }
+	local frameId = frameOrDesign
+	local free = nil
+	if type(frameOrDesign) == "table" then
+		frameId = frameOrDesign.frameId
+		parts = frameOrDesign.parts
+		free = frameOrDesign.free
+	end
 	local shape = shapeOf(frameId)
 	local out: { Placed } = {}
+	if (shape :: any).free then
+		local keys = {}
+		for key in (if type(free) == "table" then free else {}) do
+			if PlaneBuilder.parseFreeKey(key) then
+				table.insert(keys, key)
+			end
+		end
+		table.sort(keys)
+		for _, key in keys do
+			table.insert(out, { key = key, part = "body", pos = PlaneBuilder.parseFreeKey(key) :: Vector3, count = 1, shape = nil, mirror = false })
+		end
+		return out
+	end
 	for _, partName in shape.partOrder do
 		local variants = shape.parts[partName]
 		local variant = (parts and parts[partName]) or "A"
@@ -51,10 +93,10 @@ function PlaneBuilder.layout(frameId: string, parts: { [string]: string }?): { P
 		for i, c in cells do
 			local key = partName .. ":" .. i
 			local count = if c[1] ~= 0 then 2 else 1
-			local shape = c[4]
-			table.insert(out, { key = key, part = partName, pos = vec(c), count = count, shape = shape, mirror = false })
+			local cellShape = c[4]
+			table.insert(out, { key = key, part = partName, pos = vec(c), count = count, shape = cellShape, mirror = false })
 			if c[1] ~= 0 then
-				table.insert(out, { key = key, part = partName, pos = Vector3.new(-c[1], c[2], c[3]), count = count, shape = shape, mirror = true })
+				table.insert(out, { key = key, part = partName, pos = Vector3.new(-c[1], c[2], c[3]), count = count, shape = cellShape, mirror = true })
 			end
 		end
 	end
@@ -63,21 +105,31 @@ end
 
 -- 칸 이름마다 하나씩 (대칭 쌍은 한 번만): { key, part, pos(오른쪽), count }.
 -- 중요한 칸(가운데에 가까운 칸)이 먼저 오도록 정렬. 자동 채우기·부위 교체가 이 순서로 좋은 블록을 넣는다.
-function PlaneBuilder.slots(frameId: string, parts: { [string]: string }?, onlyPart: string?): { Placed }
+-- PlaneBuilder.slots(design, 부위?) 또는 예전처럼 (frameId, parts, 부위?)
+function PlaneBuilder.slots(frameOrDesign: any, a: any?, b: string?): { Placed }
+	local list: { Placed }
+	local onlyPart: string?
+	if type(frameOrDesign) == "table" then
+		list = PlaneBuilder.layout(frameOrDesign)
+		onlyPart = a
+	else
+		list = PlaneBuilder.layout(frameOrDesign, a)
+		onlyPart = b
+	end
 	local out: { Placed } = {}
 	local seen: { [string]: boolean } = {}
-	for _, p in PlaneBuilder.layout(frameId, parts) do
+	for _, p in list do
 		if not seen[p.key] and (onlyPart == nil or p.part == onlyPart) then
 			seen[p.key] = true
 			table.insert(out, p)
 		end
 	end
-	table.sort(out, function(a, b)
-		local da, db = a.pos.Magnitude, b.pos.Magnitude
-		if da ~= db then
-			return da < db
+	table.sort(out, function(x, y)
+		local dx, dy = x.pos.Magnitude, y.pos.Magnitude
+		if dx ~= dy then
+			return dx < dy
 		end
-		return a.key < b.key
+		return x.key < y.key
 	end)
 	return out
 end
@@ -100,6 +152,36 @@ local function validHex(s: any): boolean
 	return type(s) == "string" and string.match(s, "^#%x%x%x%x%x%x$") ~= nil
 end
 
+-- 자유틀 칸 목록 정리: 상자 안, 상한 이하, 조종석 아래 core 칸은 항상 있음
+function PlaneBuilder.sanitizeFree(shape: any, raw: any): { [string]: boolean }
+	local frame = Config.Frames.byId[shape.class]
+	local coreKey = PlaneBuilder.freeKey(vec(shape.core))
+	local out: { [string]: boolean } = { [coreKey] = true }
+	local n = 1
+	if type(raw) == "table" then
+		local keys = {}
+		for k in raw do
+			table.insert(keys, k)
+		end
+		table.sort(keys, function(x, y)
+			return tostring(x) < tostring(y)
+		end)
+		for _, k in keys do
+			local pos = PlaneBuilder.parseFreeKey(k)
+			if pos and not out[k] and n < frame.cells and PlaneBuilder.inBox(shape, pos) then
+				out[k] = true
+				n += 1
+			end
+		end
+	end
+	return out
+end
+
+function PlaneBuilder.inBox(shape: any, pos: Vector3): boolean
+	local box = shape.box
+	return math.abs(pos.X) <= box.x and pos.Y >= box.yMin and pos.Y <= box.yMax and pos.Z >= box.zMin and pos.Z <= box.zMax
+end
+
 -- 받은 설계 데이터를 믿을 수 있는 모양으로 정리한다 (새 표를 돌려줌, 원본은 그대로)
 function PlaneBuilder.sanitize(design: any): any
 	local d = if type(design) == "table" then design else {}
@@ -115,8 +197,12 @@ function PlaneBuilder.sanitize(design: any): any
 		local c = type(d.colors) == "table" and d.colors[partName]
 		colors[partName] = if validHex(c) then c else hex
 	end
+	local free = nil
+	if (shape :: any).free then
+		free = PlaneBuilder.sanitizeFree(shape, d.free)
+	end
 	local valid: { [string]: boolean } = {}
-	for _, p in PlaneBuilder.layout(frameId, parts) do
+	for _, p in PlaneBuilder.layout({ frameId = frameId, parts = parts, free = free }) do
 		valid[p.key] = true
 	end
 	local cellColors = {}
@@ -147,7 +233,7 @@ function PlaneBuilder.sanitize(design: any): any
 	if type(weapon) ~= "string" or weapon == "bomb" or not Config.Weapons[weapon] then
 		weapon = Shapes.DEFAULT_DESIGN.weapon
 	end
-	return { frameId = frameId, parts = parts, cells = cells, colors = colors, cellColors = cellColors, cellShapes = cellShapes, weapon = weapon }
+	return { frameId = frameId, parts = parts, cells = cells, colors = colors, cellColors = cellColors, cellShapes = cellShapes, weapon = weapon, free = free }
 end
 
 -- 블록 하나의 겉모습: 부위 색에 블록 고유색을 조금 섞고, 재질은 블록 것
@@ -187,7 +273,7 @@ end
 
 -- 칸 이름 → 틀에 정해진 처음 모양 ("모양:회전" 또는 nil)
 function PlaneBuilder.frameShapeOf(design: any, key: string): string?
-	for _, p in PlaneBuilder.layout(design.frameId, design.parts) do
+	for _, p in PlaneBuilder.layout(design) do
 		if p.key == key then
 			return p.shape
 		end
@@ -252,6 +338,44 @@ local function weld(root: BasePart, p: BasePart)
 	w.Parent = p
 end
 
+-- 부스터 자리와 무기 자리(오른쪽만). 정해진 틀은 틀에 적힌 자리,
+-- 자유틀은 블록 모양에 맞춰: 부스터 = 가운데 줄 가장 뒤 칸의 바로 뒤, 무기 = 가장 바깥(오른쪽) 칸의 바로 아래
+function PlaneBuilder.attachPoints(design: any): (Vector3, { Vector3 })
+	local shape = shapeOf(design.frameId)
+	if not (shape :: any).free then
+		local weapons = {}
+		for _, w in shape.weapons do
+			table.insert(weapons, vec(w))
+		end
+		return vec(shape.booster), weapons
+	end
+	local back: Vector3? = nil
+	local outer: Vector3? = nil
+	local occupied: { [string]: boolean } = {}
+	for _, p in PlaneBuilder.layout(design) do
+		occupied[p.key] = true
+		if p.pos.X == 0 and (not back or p.pos.Z > back.Z or (p.pos.Z == back.Z and p.pos.Y < back.Y)) then
+			back = p.pos
+		end
+		if p.pos.X >= 0 and (not outer or p.pos.X > outer.X or (p.pos.X == outer.X and p.pos.Y < outer.Y)) then
+			outer = p.pos
+		end
+	end
+	local core = vec(shape.core)
+	local b = (back or core) + Vector3.new(0, 0, 1)
+	local o = outer or core
+	local w = o - Vector3.new(0, 1, 0)
+	if o.X == 0 then
+		w = Vector3.new(1, o.Y - 1, o.Z) -- 가운데 줄뿐이면 바로 옆 아래
+	end
+	local weapons = {}
+	local frame = Config.Frames.byId[shape.class]
+	for i = 1, frame.weaponSlots do
+		table.insert(weapons, w + Vector3.new(0, 0, (i - 1) * 2))
+	end
+	return b, weapons
+end
+
 export type BuildOptions = {
 	cellSize: number?, -- 칸 크기 (기본 Flight.CELL_SIZE)
 	display: boolean?, -- true 면 허브 에디터 전시용: 고정(Anchored), 밟을 수 있음, 비행 장치 없음, 기본 칸은 반투명
@@ -284,7 +408,7 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 		end
 	end
 
-	for _, placed in PlaneBuilder.layout(design.frameId, design.parts) do
+	for _, placed in PlaneBuilder.layout(design) do
 		local block = PlaneBuilder.blockAt(design, placed.key)
 		local color, material = PlaneBuilder.blockLook(block, PlaneBuilder.cellHex(design, placed.key, placed.part))
 		local shapeId, rot = PlaneBuilder.cellShape(design, placed.key, placed.shape)
@@ -332,7 +456,8 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 	attach(seat)
 
 	-- 부스터: 꼬리 쪽 원통 + 빛나는 분사구
-	local bpos = vec(shape.booster) * cell
+	local boosterCell, weaponCells = PlaneBuilder.attachPoints(design)
+	local bpos = boosterCell * cell
 	local booster = newPart(
 		"Booster",
 		Vector3.new(cell * 1.4, cell * 0.9, cell * 0.9),
@@ -360,12 +485,12 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 		missile = Color3.fromRGB(150, 60, 50),
 		laser = Color3.fromRGB(60, 120, 200),
 	})[design.weapon] or Color3.fromRGB(50, 52, 58)
-	for i, w in shape.weapons do
+	for i, w in weaponCells do
 		for _, side in { 1, -1 } do
-			if w[1] == 0 and side == -1 then
+			if w.X == 0 and side == -1 then
 				continue
 			end
-			local pos = Vector3.new(w[1] * side, w[2], w[3]) * cell + Vector3.new(0, cell * 0.2, 0)
+			local pos = Vector3.new(w.X * side, w.Y, w.Z) * cell + Vector3.new(0, cell * 0.2, 0)
 			local gun = newPart("Weapon_" .. i, Vector3.new(cell * 0.4, cell * 0.4, cell * 1.4), CFrame.new(pos), gunColor, Enum.Material.Metal)
 			gun.Parent = model
 			attach(gun)
@@ -409,7 +534,7 @@ end
 function PlaneBuilder.bottomY(design: any): number
 	local d = PlaneBuilder.sanitize(design)
 	local low = math.huge
-	for _, p in PlaneBuilder.layout(d.frameId, d.parts) do
+	for _, p in PlaneBuilder.layout(d) do
 		low = math.min(low, p.pos.Y)
 	end
 	return low

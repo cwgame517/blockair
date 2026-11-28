@@ -68,7 +68,7 @@ function PlaneEdit.newDesign(): any
 end
 
 local function slotCount(design: any, key: string): number?
-	for _, s in PlaneBuilder.slots(design.frameId, design.parts) do
+	for _, s in PlaneBuilder.slots(design) do
 		if s.key == key then
 			return s.count
 		end
@@ -105,7 +105,7 @@ end
 -- 돌려줌: 바뀐 칸 수, 블록이 모자라 못 채운 칸 수
 function PlaneEdit.fillPart(design: any, inv: any, part: string, blockId: number): (number, number)
 	local changed, short = 0, 0
-	for _, s in PlaneBuilder.slots(design.frameId, design.parts, part) do
+	for _, s in PlaneBuilder.slots(design, part) do
 		if design.cells[s.key] == blockId or (blockId == 0 and design.cells[s.key] == nil) then
 			continue
 		end
@@ -122,7 +122,7 @@ end
 -- 모든 칸을 비워 블록을 창고로 돌려보내기. 돌려준 블록 수
 function PlaneEdit.clearAll(design: any, inv: any): number
 	local n = 0
-	for _, s in PlaneBuilder.slots(design.frameId, design.parts) do
+	for _, s in PlaneBuilder.slots(design) do
 		local id = design.cells[s.key]
 		if id then
 			give(inv, id, s.count)
@@ -190,7 +190,7 @@ function PlaneEdit.autoFill(design: any, inv: any): number
 		mine[id] = true
 	end
 	PlaneEdit.clearAll(design, inv)
-	return fillEmpty(design, inv, PlaneBuilder.slots(design.frameId, design.parts), mine, false)
+	return fillEmpty(design, inv, PlaneBuilder.slots(design), mine, false)
 end
 
 export type SwapResult = { returned: number, refilled: number, defaults: number }
@@ -207,7 +207,7 @@ function PlaneEdit.setParts(design: any, inv: any, newParts: { [string]: string 
 			continue
 		end
 		local back: { [number]: boolean } = {}
-		for _, s in PlaneBuilder.slots(design.frameId, design.parts, part) do
+		for _, s in PlaneBuilder.slots(design, part) do
 			local id = design.cells[s.key]
 			if id then
 				give(inv, id, s.count)
@@ -223,7 +223,7 @@ function PlaneEdit.setParts(design: any, inv: any, newParts: { [string]: string 
 			end
 		end
 		design.parts[part] = want
-		local slots = PlaneBuilder.slots(design.frameId, design.parts, part)
+		local slots = PlaneBuilder.slots(design, part)
 		fillEmpty(design, inv, slots, back, true)
 		for _, s in slots do
 			if design.cells[s.key] then
@@ -239,7 +239,7 @@ end
 -- 설계 칸 바꾸기: 지금 비행기(cur)의 블록을 창고로 돌려보내고(cur 의 배치는 기억으로 남김),
 -- 고른 칸(target)의 배치대로 창고에서 블록을 가져와 채운다. 모자란 칸 수를 돌려준다.
 function PlaneEdit.switchSlot(cur: any, target: any, inv: any): number
-	for _, s in PlaneBuilder.slots(cur.frameId, cur.parts) do
+	for _, s in PlaneBuilder.slots(cur) do
 		local id = cur.cells[s.key]
 		if id then
 			give(inv, id, s.count)
@@ -248,7 +248,7 @@ function PlaneEdit.switchSlot(cur: any, target: any, inv: any): number
 	local wanted = target.cells
 	target.cells = {}
 	local missing = 0
-	for _, s in PlaneBuilder.slots(target.frameId, target.parts) do
+	for _, s in PlaneBuilder.slots(target) do
 		local id = wanted[s.key]
 		if id then
 			if take(inv, id, s.count) then
@@ -265,7 +265,7 @@ end
 function PlaneEdit.paintPart(design: any, part: string, hex: string)
 	design.colors[part] = hex
 	if design.cellColors then
-		for _, s in PlaneBuilder.slots(design.frameId, design.parts, part) do
+		for _, s in PlaneBuilder.slots(design, part) do
 			design.cellColors[s.key] = nil
 		end
 	end
@@ -274,7 +274,7 @@ end
 -- 한 칸 색칠 (대칭 칸도 같이). hex 가 nil 이면 부위 색으로 되돌림
 function PlaneEdit.paintCell(design: any, key: string, hex: string?): boolean
 	local ok = false
-	for _, s in PlaneBuilder.slots(design.frameId, design.parts) do
+	for _, s in PlaneBuilder.slots(design) do
 		if s.key == key then
 			ok = true
 		end
@@ -294,11 +294,16 @@ function PlaneEdit.setFrame(design: any, inv: any, frameId: string): number
 	if not shape or design.frameId == frameId then
 		return 0
 	end
+	if (shape :: any).free then
+		PlaneEdit.toFree(design, inv, frameId)
+		return 0
+	end
 	local back: { [number]: boolean } = {}
 	for _, id in design.cells do
 		back[id] = true
 	end
 	PlaneEdit.clearAll(design, inv)
+	design.free = nil
 	design.frameId = frameId
 	local parts = {}
 	for _, partName in shape.partOrder do
@@ -307,7 +312,7 @@ function PlaneEdit.setFrame(design: any, inv: any, frameId: string): number
 	design.parts = parts
 	design.cellColors = {}
 	design.cellShapes = {}
-	local slots = PlaneBuilder.slots(design.frameId, design.parts)
+	local slots = PlaneBuilder.slots(design)
 	if next(back) ~= nil then
 		fillEmpty(design, inv, slots, back, true)
 	end
@@ -320,13 +325,176 @@ function PlaneEdit.setFrame(design: any, inv: any, frameId: string): number
 	return defaults
 end
 
+-- 거울(좌우 반대) 칸의 회전 번호
+function PlaneEdit.mirrorRot(rot: number): number
+	return (4 - rot % 4) % 4 + (if rot >= 4 then 4 else 0)
+end
+
+-- 자유틀로 바꾸기: 지금 비행기 모양을 블록·모양·색 그대로 자유틀 칸으로 옮긴다 (블록 수도 그대로).
+-- 칸 수가 등급 상한을 넘으면 바깥쪽 칸부터 빼서 창고로 돌려보낸다.
+function PlaneEdit.toFree(design: any, inv: any, frameId: string)
+	local shape = Shapes.byId[frameId] :: any
+	local frame = Config.Frames.byId[shape.class]
+	local cells: { { pos: Vector3, block: number?, shape: string, hex: string } } = {}
+	for _, p in PlaneBuilder.layout(design) do
+		local id, rot = PlaneBuilder.cellShape(design, p.key, p.shape)
+		if p.mirror then
+			rot = PlaneEdit.mirrorRot(rot)
+		end
+		local block = design.cells[p.key]
+		table.insert(cells, {
+			pos = p.pos,
+			block = block,
+			shape = `{id}:{rot}`,
+			hex = PlaneBuilder.cellHex(design, p.key, p.part),
+		})
+	end
+	table.sort(cells, function(a, b)
+		return a.pos.Magnitude < b.pos.Magnitude
+	end)
+	local coreKey = PlaneBuilder.freeKey(Vector3.new(shape.core[1], shape.core[2], shape.core[3]))
+	local free: { [string]: boolean } = { [coreKey] = true }
+	local newCells, newShapes, newColors = {}, {}, {}
+	local count = 1
+	for _, c in cells do
+		local key = PlaneBuilder.freeKey(c.pos)
+		local keep = PlaneBuilder.inBox(shape, c.pos) and (free[key] or count < frame.cells)
+		if keep then
+			if not free[key] then
+				free[key] = true
+				count += 1
+			end
+			if c.block then
+				newCells[key] = c.block
+			end
+			if c.shape ~= "cube:0" then
+				newShapes[key] = c.shape
+			end
+			newColors[key] = c.hex
+		elseif c.block then
+			give(inv, c.block, 1)
+		end
+	end
+	design.frameId = frameId
+	design.parts = { body = "A" }
+	design.free = free
+	design.cells = newCells
+	design.cellShapes = newShapes
+	design.cellColors = newColors
+	design.colors = { body = design.colors and design.colors.body or shape.defaultColors.body }
+end
+
+local NEIGHBORS = {
+	Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 1, 0),
+	Vector3.new(0, -1, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1),
+}
+
+-- 자유틀에 블록 하나 붙이기. blockId 0 = 기본 블록(공짜). 실패 이유:
+-- "free"(자유틀 아님) | "box"(상자 밖) | "taken"(이미 있음) | "touch"(붙어 있는 칸 없음) | "max"(칸 수 상한) | "blocks"(블록 모자람)
+function PlaneEdit.addCell(design: any, inv: any, pos: Vector3, blockId: number, shapeStr: string?): (boolean, string?)
+	local shape = Shapes.byId[design.frameId] :: any
+	if not shape or not shape.free then
+		return false, "free"
+	end
+	if not PlaneBuilder.inBox(shape, pos) then
+		return false, "box"
+	end
+	local key = PlaneBuilder.freeKey(pos)
+	design.free = design.free or {}
+	if design.free[key] then
+		return false, "taken"
+	end
+	local touching = false
+	for _, d in NEIGHBORS do
+		if design.free[PlaneBuilder.freeKey(pos + d)] then
+			touching = true
+		end
+	end
+	if not touching then
+		return false, "touch"
+	end
+	local n = 0
+	for _ in design.free do
+		n += 1
+	end
+	if n >= Config.Frames.byId[shape.class].cells then
+		return false, "max"
+	end
+	if blockId ~= 0 then
+		if not Blocks.byId[blockId] or not take(inv, blockId, 1) then
+			return false, "blocks"
+		end
+		design.cells[key] = blockId
+	end
+	design.free[key] = true
+	if shapeStr and PlaneBuilder.parseShape(shapeStr) and shapeStr ~= "cube:0" then
+		design.cellShapes = design.cellShapes or {}
+		design.cellShapes[key] = shapeStr
+	end
+	return true, nil
+end
+
+-- 자유틀에서 블록 하나 떼기 (블록은 창고로). 실패 이유: "free" | "none" | "core"(조종석 아래) | "min"(최소 칸 수) | "split"(떨어진 조각이 생김)
+function PlaneEdit.removeCell(design: any, inv: any, key: string): (boolean, string?)
+	local shape = Shapes.byId[design.frameId] :: any
+	if not shape or not shape.free then
+		return false, "free"
+	end
+	if not design.free or not design.free[key] then
+		return false, "none"
+	end
+	local coreKey = PlaneBuilder.freeKey(Vector3.new(shape.core[1], shape.core[2], shape.core[3]))
+	if key == coreKey then
+		return false, "core"
+	end
+	local n = 0
+	for _ in design.free do
+		n += 1
+	end
+	if n <= Config.Editor.FREE_MIN_CELLS then
+		return false, "min"
+	end
+	-- 떼고 나서도 모든 칸이 조종석 칸과 이어져 있는지
+	local seen: { [string]: boolean } = { [coreKey] = true }
+	local stack = { coreKey }
+	local reached = 1
+	while #stack > 0 do
+		local cur = table.remove(stack) :: string
+		local pos = PlaneBuilder.parseFreeKey(cur) :: Vector3
+		for _, d in NEIGHBORS do
+			local k = PlaneBuilder.freeKey(pos + d)
+			if k ~= key and design.free[k] and not seen[k] then
+				seen[k] = true
+				reached += 1
+				table.insert(stack, k)
+			end
+		end
+	end
+	if reached < n - 1 then
+		return false, "split"
+	end
+	local id = design.cells[key]
+	if id then
+		give(inv, id, 1)
+	end
+	design.free[key] = nil
+	design.cells[key] = nil
+	if design.cellShapes then
+		design.cellShapes[key] = nil
+	end
+	if design.cellColors then
+		design.cellColors[key] = nil
+	end
+	return true, nil
+end
+
 -- 칸 모양 바꾸기 (대칭 칸도 같이). shape = "모양:회전". 성능은 그대로
 function PlaneEdit.setShape(design: any, key: string, shape: string): boolean
 	if not PlaneBuilder.parseShape(shape) then
 		return false
 	end
 	local ok = false
-	for _, s in PlaneBuilder.slots(design.frameId, design.parts) do
+	for _, s in PlaneBuilder.slots(design) do
 		if s.key == key then
 			ok = true
 		end
@@ -343,7 +511,7 @@ end
 -- 설계에 실제로 들어 있는 블록 수
 function PlaneEdit.placedBlocks(design: any): number
 	local n = 0
-	for _, s in PlaneBuilder.slots(design.frameId, design.parts) do
+	for _, s in PlaneBuilder.slots(design) do
 		if design.cells[s.key] then
 			n += s.count
 		end

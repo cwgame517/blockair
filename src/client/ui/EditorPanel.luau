@@ -39,6 +39,12 @@ local toastLabel: TextLabel
 local bars: { [string]: any } = {}
 
 local mode = "cell"
+local freeMode = false
+local mirror = true -- 자유틀 대칭 모드 (기본 켬)
+local toolsFrame: Frame
+local mirrorButton: TextButton? = nil
+local autoButton: TextButton? = nil
+local buildModes: (boolean) -> ()
 local selectedBlock = 0
 local selectedColor = Editor.PALETTE[1]
 local selectedShape = "wedge"
@@ -146,6 +152,19 @@ local function renderHotbar()
 		renderHotbar()
 	end)
 
+	if freeMode then
+		-- 자유틀: 공짜 기본 블록으로도 붙일 수 있다
+		local def = button(hotbar, "기본\n블록", Color3.fromRGB(110, 75, 45), UDim2.fromOffset(64, 64))
+		def.LayoutOrder = 0
+		def.TextSize = 13
+		stroke(def, selectedBlock == -2)
+		def.Activated:Connect(function()
+			selectedBlock = -2
+			renderHotbar()
+		end)
+		erase.Text = if mode == "build" then "떼기" else "기본으로"
+	end
+
 	if #inventory == 0 then
 		local l = Widgets.label(hotbar, "창고에 블록이 없어요. 섬에서 캐서 격납고에 맡기면 여기 생겨요", UDim2.fromOffset(420, 64), UDim2.new(), 14)
 		l.LayoutOrder = 1
@@ -177,7 +196,68 @@ local function renderHotbar()
 	end
 end
 
-local function renderModes()
+local renderModes: () -> ()
+
+-- 도구 버튼 만들기. 자유틀이면 [붙이기] [바꾸기] [모양] [칸 색칠] [전체 색칠] [대칭]
+buildModes = function(free: boolean)
+	freeMode = free
+	for _, b in modeButtons do
+		b:Destroy()
+	end
+	table.clear(modeButtons)
+	if mirrorButton then
+		mirrorButton:Destroy()
+		mirrorButton = nil
+	end
+	local modes
+	if free then
+		modes = { { "build", "붙이기", 66 }, { "cell", "바꾸기", 66 }, { "shape", "모양", 54 }, { "paintCell", "칸 색칠", 74 }, { "paint", "전체 색칠", 84 } }
+	else
+		modes = { { "cell", "한 칸", 66 }, { "fill", "부위 채우기", 96 }, { "paintCell", "칸 색칠", 80 }, { "paint", "부위 색칠", 88 } }
+		if Editor.FREE_SHAPES then
+			table.insert(modes, 3, { "shape", "모양", 58 })
+		end
+	end
+	local valid = false
+	for i, m in modes do
+		local id = m[1] :: string
+		if id == mode then
+			valid = true
+		end
+		local b = button(toolsFrame, m[2] :: string, GRAY, UDim2.fromOffset(m[3] :: number, 36))
+		b.LayoutOrder = i
+		modeButtons[id] = b
+		b.Activated:Connect(function()
+			mode = id
+			renderModes()
+			renderHotbar()
+			EditorPanel.ModeChosen:Fire(mode)
+		end)
+	end
+	if not valid then
+		mode = modes[1][1] :: string
+	end
+	if free then
+		local mb = button(toolsFrame, "", GRAY, UDim2.fromOffset(60, 36))
+		mb.LayoutOrder = 9
+		mirrorButton = mb
+		local function paint()
+			mb.Text = if mirror then "대칭 켬" else "대칭 끔"
+			mb.BackgroundColor3 = if mirror then Color3.fromRGB(120, 90, 200) else GRAY
+		end
+		paint()
+		mb.Activated:Connect(function()
+			mirror = not mirror
+			paint()
+		end)
+	end
+	if autoButton then
+		autoButton.Visible = not free
+	end
+	renderModes()
+end
+
+renderModes = function()
 	for m, b in modeButtons do
 		b.BackgroundColor3 = if m == mode then Widgets.ACCENT else GRAY
 	end
@@ -219,27 +299,15 @@ function EditorPanel.Mount(playerGui: Instance)
 	tools.BackgroundTransparency = 1
 	tools.Parent = bottom
 	hlist(tools, 6)
-	local modes = { { "cell", "한 칸", 66 }, { "fill", "부위 채우기", 96 }, { "paintCell", "칸 색칠", 80 }, { "paint", "부위 색칠", 88 } }
-	if Editor.FREE_SHAPES then -- 자유 에디터(나중에)에서만 칸 모양 고르기
-		table.insert(modes, 3, { "shape", "모양", 58 })
-	end
-	for i, m in modes do
-		local b = button(tools, m[2] :: string, GRAY, UDim2.fromOffset(m[3] :: number, 36))
-		b.LayoutOrder = i
-		modeButtons[m[1] :: string] = b
-		b.Activated:Connect(function()
-			mode = m[1] :: string
-			renderModes()
-			renderHotbar()
-			EditorPanel.ModeChosen:Fire(mode)
-		end)
-	end
+	toolsFrame = tools
+	buildModes(false)
 	local gap = Instance.new("Frame")
 	gap.Size = UDim2.fromOffset(8, 36)
 	gap.BackgroundTransparency = 1
 	gap.LayoutOrder = 10
 	gap.Parent = tools
 	local auto = button(tools, "자동 채우기", GREEN, UDim2.fromOffset(96, 36))
+	autoButton = auto
 	auto.LayoutOrder = 11
 	auto.Activated:Connect(function()
 		EditorPanel.Action:Fire("auto")
@@ -368,6 +436,10 @@ function EditorPanel.GetBlock(): number
 	return selectedBlock
 end
 
+function EditorPanel.GetMirror(): boolean
+	return mirror
+end
+
 function EditorPanel.GetShape(): string
 	return selectedShape
 end
@@ -379,6 +451,10 @@ end
 -- 서버 상태로 다시 그리기
 function EditorPanel.SetState(state: any)
 	inventory = state.inventory
+	local free = state.design.free ~= nil
+	if free ~= freeMode or not next(modeButtons) then
+		buildModes(free)
+	end
 	-- 고른 블록이 다 떨어졌으면 그대로 두되(빼기 아님), 처음 열 때는 가장 좋은 블록을 고른다
 	if selectedBlock == -1 then
 		selectedBlock = if #inventory > 0 then inventory[1].id else 0
@@ -401,7 +477,7 @@ function EditorPanel.SetState(state: any)
 				EditorPanel.Action:Fire("frame", f.id)
 			end)
 		end
-		b.Text = if f.unlocked then f.short else `{f.short} Lv{f.level}`
+		b.Text = if f.unlocked then f.short elseif f.pass and state.level >= f.level then `{f.short} 패스` else `{f.short} Lv{f.level}`
 		b.BackgroundColor3 = if state.design.frameId == f.id then Widgets.ACCENT else GRAY
 	end
 	if state.level < Editor.PARTS_LEVEL then

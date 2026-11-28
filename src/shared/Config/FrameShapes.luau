@@ -99,13 +99,12 @@ local small_ext: Shape = {
 	},
 	parts = {
 		body = {
-			A = { -- 24칸
+			A = { -- 22칸
 				{ 0, 0, -2 }, { 0, 0, -1 }, { 0, 0, 0 }, { 0, 0, 1 }, { 0, 0, 2 }, { 0, 0, 3, "stairs:2" },
 				{ 1, 0, -1 }, { 1, 0, 0 }, { 1, 0, 1 }, { 1, 0, 2, "halfwedge:2" },
 				{ 0, -1, -1, "wedge:4" }, { 0, -1, 0 }, { 0, -1, 1 }, { 0, -1, 2, "wedge:6" },
 				{ 0, 1, -2, "wedge:0" }, -- 앞유리
 				{ 0, 1, 0, "wedge:2" }, -- 조종석 뒤 캐노피
-				{ 1, 1, -1, "halfwedge:3" }, -- 조종석 옆
 			},
 		},
 		nose = {
@@ -130,8 +129,31 @@ local small_ext: Shape = {
 	defaultColors = { body = "#7BC043", nose = "#F2F2F2", wing = "#2E9E5B", tail = "#2B2B30" },
 }
 
-local byId: { [string]: Shape } = { small_basic = small_basic, small_ext = small_ext }
-local order = { "small_basic", "small_ext" } -- 에디터 [틀] 버튼 순서
+-- 자유틀 (게임패스): 정해진 칸 없이 상자 안 아무 곳에나 블록을 붙이고 떼고, 모양 블록으로 바꾼다.
+-- 칸 수 상한·무기 칸·피격 구슬은 같은 등급 규칙. 칸 자리는 설계 데이터 free 에 "x,y,z" 로 저장.
+-- core 칸(조종석 아래)은 뗄 수 없다. 처음에는 지금 비행기 모양을 그대로 옮겨 와서 시작한다.
+local small_free: Shape = {
+	id = "small_free",
+	name = "소형 자유틀",
+	short = "자유틀",
+	class = "small",
+	free = true,
+	box = { x = 7, yMin = -3, yMax = 4, zMin = -8, zMax = 8 }, -- 블록을 놓을 수 있는 상자 (칸 단위)
+	core = { 0, 0, -1 },
+	partOrder = { "body" },
+	swappable = {},
+	partNames = { body = "몸통" },
+	variantOrder = { "A" },
+	variantNames = {},
+	parts = { body = { A = {} } },
+	seat = { 0, 1, -1 },
+	booster = { 0, -1, 3 }, -- 자유틀은 블록 모양에 맞춰 다시 정함 (가장 뒤 칸 뒤)
+	weapons = { { 3, -1, 0 } }, -- 자유틀은 가장 바깥 칸 아래로 다시 정함
+	defaultColors = { body = "#3D7FD9" },
+} :: any
+
+local byId: { [string]: Shape } = { small_basic = small_basic, small_ext = small_ext, small_free = small_free }
+local order = { "small_basic", "small_ext", "small_free" } -- 에디터 [틀] 버튼 순서 (자유틀은 게임패스)
 
 -- 처음 받는 비행기 (저장된 비행기가 없을 때)
 local DEFAULT_DESIGN = {

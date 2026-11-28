@@ -8,6 +8,7 @@
 --   /give 100     창고(맡긴 블록)에 여러 가지 블록 100개 넣기 (팔기 테스트)
 --   /hurt 300     내 비행기 HP 300 깎기 (격납고 수리 테스트)
 --   /level 5      레벨을 5로 (부위 교체 테스트)
+--   /freepass     (허브) 자유틀 게임패스를 가진 것처럼 켜기/끄기
 --   /allblocks 20 (허브) 36종 블록을 종류마다 20개씩 창고에 넣기 (에디터 테스트)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -82,6 +83,14 @@ local function onChat(player: Player, message: string)
 		end
 		print(`[Dev] {player.Name} 창고에 블록 36종 × {each}개`)
 		refreshEditor(player)
+	elseif cmd == "freepass" then
+		if not EditorService then
+			print("[Dev] /freepass 는 허브에서만 됩니다")
+			return
+		end
+		local on = not EditorService:HasPass(player)
+		EditorService:SetDevPass(player, on)
+		print(`[Dev] {player.Name} 자유틀 게임패스 {if on then "켬" else "끔"}`)
 	elseif cmd == "level" then
 		ProgressService:SetLevel(player, if arg ~= "" then n else 5)
 		print(`[Dev] {player.Name} 레벨 {ProgressService:GetLevel(player)}`)

@@ -4,6 +4,7 @@
 --   1단계(처음부터): 칸 채우기·빼기, 부위 채우기, 자동 채우기, 모두 빼기, 부위 색, 무기 고르기, 설계 칸 3개
 --   2단계(레벨 5): 키오스크에서 기수·날개·꼬리 모양 바꾸기
 -- 규칙은 Shared/PlaneEdit 에 있고, 클라이언트 미리보기도 같은 규칙을 쓴다.
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -33,6 +34,40 @@ type Pad = {
 local pads: { Pad } = {}
 local padOf: { [Player]: Pad } = {}
 local lastEdit: { [Player]: number } = {}
+local hasPass: { [Player]: boolean } = {} -- 자유틀 게임패스 (Studio 는 /freepass 로 켜고 끔)
+
+local function checkPass(player: Player)
+	local id = Editor.FREE_PASS_ID
+	if id <= 0 then
+		return
+	end
+	local ok, owns = pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
+	end)
+	if ok and owns then
+		hasPass[player] = true
+	end
+end
+
+-- 자유틀 칸의 좌우 반대 칸 이름 (가운데 줄이면 nil)
+local function mirrorKey(key: string): string?
+	local pos = PlaneBuilder.parseFreeKey(key)
+	if not pos or pos.X == 0 then
+		return nil
+	end
+	return PlaneBuilder.freeKey(Vector3.new(-pos.X, pos.Y, pos.Z))
+end
+
+local FREE_WHY = {
+	box = "상자 밖이라 못 붙여요",
+	taken = "이미 블록이 있어요",
+	touch = "다른 블록에 붙여야 해요",
+	max = "칸 수가 가득 찼어요",
+	blocks = "블록이 모자라요",
+	core = "조종석 아래 블록은 뗄 수 없어요",
+	min = `블록은 최소 {Editor.FREE_MIN_CELLS}개 있어야 해요`,
+	split = "떼면 비행기가 두 조각이 나요",
+}
 
 local WEAPONS = { cannon = true, missile = true, laser = true }
 local PALETTE: { [string]: boolean } = {}
@@ -154,18 +189,25 @@ local function rebuild(player: Player)
 end
 
 -- 고를 수 있는 틀 목록 (등급 해금 레벨이 되면 기본틀·확장 기본틀 모두 무료)
-local function frameList(data: any)
+local function frameList(player: Player, data: any)
 	local out = {}
 	for _, id in Shapes.order do
 		local shape = Shapes.byId[id]
 		local need = Config.Frames.byId[shape.class].unlockLevel
-		table.insert(out, { id = id, short = shape.short, unlocked = data.level >= need, level = need })
+		local pass = (shape :: any).free == true
+		table.insert(out, {
+			id = id,
+			short = shape.short,
+			unlocked = data.level >= need and (not pass or hasPass[player] == true),
+			level = need,
+			pass = pass,
+		})
 	end
 	return out
 end
 
 -- 클라이언트에 보낼 에디터 상태
-local function snapshot(data: any)
+local function snapshot(player: Player, data: any)
 	local inv = {}
 	for key, n in data.inventory do
 		local id = tonumber(key)
@@ -182,7 +224,9 @@ local function snapshot(data: any)
 		slots = Editor.SLOTS,
 		inventory = inv,
 		level = data.level,
-		frames = frameList(data),
+		frames = frameList(player, data),
+		freePass = hasPass[player] == true,
+		passId = Editor.FREE_PASS_ID,
 	}
 end
 
@@ -190,7 +234,7 @@ function EditorService:Push(player: Player)
 	local data = DataService:Get(player)
 	if data then
 		ensureDesigns(data)
-		Net.event("EditorState"):FireClient(player, snapshot(data))
+		Net.event("EditorState"):FireClient(player, snapshot(player, data))
 	end
 end
 
@@ -226,6 +270,10 @@ local function apply(player: Player, data: any, op: any): (boolean, string?, boo
 		if not ok and why == "blocks" then
 			return false, "블록이 모자라요 (양쪽 칸은 2개 필요)", true
 		end
+		local other = if ok and op.mirror == true and PlaneBuilder.isFree(design) then mirrorKey(op.key) else nil
+		if other and design.free[other] then
+			PlaneEdit.setCell(design, inv, other, block)
+		end
 		return ok
 	elseif kind == "fill" then
 		local block = blockArg(op.block)
@@ -254,10 +302,58 @@ local function apply(player: Player, data: any, op: any): (boolean, string?, boo
 		return true
 	elseif kind == "shape" then
 		-- 칸 모양 직접 고르기는 자유 에디터(게임패스, 나중에) 전용
-		if not Editor.FREE_SHAPES or type(op.key) ~= "string" or type(op.shape) ~= "string" then
+		if not (Editor.FREE_SHAPES or PlaneBuilder.isFree(design)) or type(op.key) ~= "string" or type(op.shape) ~= "string" then
 			return false
 		end
-		return PlaneEdit.setShape(design, op.key, op.shape)
+		local ok = PlaneEdit.setShape(design, op.key, op.shape)
+		local other = if op.mirror == true then mirrorKey(op.key) else nil
+		local id, rot = PlaneBuilder.parseShape(op.shape)
+		if ok and other and design.free[other] and id and rot then
+			PlaneEdit.setShape(design, other, `{id}:{PlaneEdit.mirrorRot(rot)}`)
+		end
+		return ok
+	elseif kind == "add" then
+		-- 자유틀: 블록 붙이기 (mirror 면 반대쪽에도)
+		local p = op.pos
+		local block = blockArg(op.block)
+		if type(p) ~= "table" or block == nil then
+			return false
+		end
+		local x, y, z = p[1], p[2], p[3]
+		if typeof(x) ~= "number" or typeof(y) ~= "number" or typeof(z) ~= "number" then
+			return false
+		end
+		local pos = Vector3.new(math.round(x), math.round(y), math.round(z))
+		local shapeStr = if type(op.shape) == "string" then op.shape else nil
+		local ok, why = PlaneEdit.addCell(design, inv, pos, block, shapeStr)
+		if not ok then
+			return false, FREE_WHY[why or ""], true
+		end
+		if op.mirror == true and pos.X ~= 0 then
+			local mShape = nil
+			local id, rot = PlaneBuilder.parseShape(shapeStr)
+			if id and rot then
+				mShape = `{id}:{PlaneEdit.mirrorRot(rot)}`
+			end
+			local ok2, why2 = PlaneEdit.addCell(design, inv, Vector3.new(-pos.X, pos.Y, pos.Z), block, mShape)
+			if not ok2 and why2 == "blocks" then
+				return true, "반대쪽은 블록이 모자라 못 붙였어요", true
+			end
+		end
+		return true
+	elseif kind == "remove" then
+		if type(op.key) ~= "string" then
+			return false
+		end
+		local ok, why = PlaneEdit.removeCell(design, inv, op.key)
+		if not ok then
+			return false, FREE_WHY[why or ""], true
+		end
+		local other = if op.mirror == true then mirrorKey(op.key) else nil
+		if other and design.free[other] then
+			PlaneEdit.removeCell(design, inv, other)
+		end
+		return true
 	elseif kind == "frame" then
 		local shape = type(op.id) == "string" and Shapes.byId[op.id]
 		if not shape then
@@ -270,7 +366,13 @@ local function apply(player: Player, data: any, op: any): (boolean, string?, boo
 		if design.frameId == op.id then
 			return true
 		end
+		if (shape :: any).free and not hasPass[player] then
+			return false, "자유틀은 게임패스가 있어야 해요", true
+		end
 		local defaults = PlaneEdit.setFrame(design, inv, op.id)
+		if (shape :: any).free then
+			return true, "자유틀! 블록을 눌러 붙이고 떼고, 모양을 바꿔 보세요"
+		end
 		if defaults > 0 and PlaneEdit.placedBlocks(design) > 0 then
 			return true, `{shape.name}으로 바꿨어요. 모자란 {defaults}칸은 기본 블록`
 		end
@@ -280,7 +382,13 @@ local function apply(player: Player, data: any, op: any): (boolean, string?, boo
 		if type(op.key) ~= "string" or type(op.hex) ~= "string" or (op.hex ~= "" and not PALETTE[op.hex]) then
 			return false
 		end
-		return PlaneEdit.paintCell(design, op.key, if op.hex == "" then nil else op.hex)
+		local hex = if op.hex == "" then nil else op.hex
+		local ok = PlaneEdit.paintCell(design, op.key, hex)
+		local other = if op.mirror == true and PlaneBuilder.isFree(design) then mirrorKey(op.key) else nil
+		if ok and other and design.free[other] then
+			PlaneEdit.paintCell(design, other, hex)
+		end
+		return ok
 	elseif kind == "weapon" then
 		if type(op.id) ~= "string" or not WEAPONS[op.id] then
 			return false
@@ -332,14 +440,14 @@ local function onEdit(player: Player, op: any)
 	ensureDesigns(data)
 	local now = os.clock()
 	if now - (lastEdit[player] or 0) < Editor.EDIT_COOLDOWN then
-		return { ok = false, state = snapshot(data) }
+		return { ok = false, state = snapshot(player, data) }
 	end
 	lastEdit[player] = now
 	local ok, msg, warn = apply(player, data, op)
 	if ok then
 		rebuild(player)
 	end
-	return { ok = ok, msg = msg, warn = warn, state = snapshot(data) }
+	return { ok = ok, msg = msg, warn = warn, state = snapshot(player, data) }
 end
 
 local function assign(player: Player)
@@ -376,6 +484,16 @@ local function release(player: Player)
 	end
 end
 
+-- Studio 테스트 명령 /freepass: 게임패스를 가진 것처럼 켜고 끄기
+function EditorService:SetDevPass(player: Player, on: boolean)
+	hasPass[player] = on or nil
+	EditorService:Push(player)
+end
+
+function EditorService:HasPass(player: Player): boolean
+	return hasPass[player] == true
+end
+
 function EditorService:Init(services)
 	DataService = services.DataService
 end
@@ -398,7 +516,21 @@ function EditorService:Start()
 			assign(player)
 		end
 	end
-	Players.PlayerRemoving:Connect(release)
+	Players.PlayerRemoving:Connect(function(player)
+		release(player)
+		hasPass[player] = nil
+	end)
+	Players.PlayerAdded:Connect(checkPass)
+	for _, player in Players:GetPlayers() do
+		task.spawn(checkPass, player)
+	end
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, bought: boolean)
+		if bought and passId == Editor.FREE_PASS_ID then
+			hasPass[player] = true
+			EditorService:Push(player)
+			Net.event("Notify"):FireClient(player, "자유틀이 열렸어요!")
+		end
+	end)
 
 	Net.func("GetEditor").OnServerInvoke = function(player: Player)
 		local data = DataService:Get(player)
@@ -406,7 +538,7 @@ function EditorService:Start()
 			return nil
 		end
 		ensureDesigns(data)
-		return snapshot(data)
+		return snapshot(player, data)
 	end
 	Net.func("EditPlane").OnServerInvoke = onEdit
 end

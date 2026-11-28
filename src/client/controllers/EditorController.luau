@@ -2,6 +2,7 @@
 -- 허브 에디터 (4단계). 내 조립 자리 근처를 걸으면 에디터 화면이 뜨고,
 -- 전시된 비행기의 칸을 누르면(PC 클릭·모바일 탭) 고른 블록으로 채운다. 대칭 칸은 같이 바뀐다.
 -- 키오스크(또는 [부위 교체] 버튼)로 부위 교체 화면을 연다 (레벨 5).
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -96,12 +97,12 @@ local function send(op: any): any?
 	return if r.ok then r.state else nil
 end
 
--- 화면 위치에서 광선을 쏴서 내 전시 비행기의 칸을 찾는다
-local function cellAt(screenPos: Vector2): BasePart?
+-- 화면 위치에서 광선을 쏴서 내 전시 비행기의 칸을 찾는다 (맞은 결과도 같이)
+local function cellAt(screenPos: Vector2): (BasePart?, RaycastResult?)
 	local pad = myPad()
 	local display = pad and pad:FindFirstChild("Display")
 	if not display then
-		return nil
+		return nil, nil
 	end
 	local camera = workspace.CurrentCamera
 	local ray = camera:ViewportPointToRay(screenPos.X, screenPos.Y)
@@ -110,36 +111,77 @@ local function cellAt(screenPos: Vector2): BasePart?
 	params.FilterDescendantsInstances = { display }
 	local hit = workspace:Raycast(ray.Origin, ray.Direction * 300, params)
 	if hit and hit.Instance:GetAttribute("Cell") then
-		return hit.Instance :: BasePart
+		return hit.Instance :: BasePart, hit
 	end
-	return nil
+	return nil, nil
+end
+
+-- 자유틀: 누른 면 바깥쪽 옆 칸 자리 (전시 모델 기준 격자 좌표)
+local function neighborPos(cell: BasePart, hit: RaycastResult): Vector3?
+	local pos = PlaneBuilder.parseFreeKey(cell:GetAttribute("Cell"))
+	local display = cell:FindFirstAncestorOfClass("Model")
+	if not pos or not display then
+		return nil
+	end
+	local n = display:GetPivot():VectorToObjectSpace(hit.Normal)
+	local ax, ay, az = math.abs(n.X), math.abs(n.Y), math.abs(n.Z)
+	local step
+	if ax >= ay and ax >= az then
+		step = Vector3.new(math.sign(n.X), 0, 0)
+	elseif ay >= az then
+		step = Vector3.new(0, math.sign(n.Y), 0)
+	else
+		step = Vector3.new(0, 0, math.sign(n.Z))
+	end
+	return pos + step
+end
+
+local function isFree(): boolean
+	return state ~= nil and PlaneBuilder.isFree(state.design)
+end
+
+-- 고른 블록 번호 (-2 = 기본 블록 → 0)
+local function chosenBlock(): number
+	local b = Panel.GetBlock()
+	return if b < 0 then 0 else b
 end
 
 local function onPress(screenPos: Vector2)
 	if not inZone or not state or Parts.IsOpen() then
 		return
 	end
-	local cell = cellAt(screenPos)
-	if not cell then
+	local cell, hit = cellAt(screenPos)
+	if not cell or not hit then
 		return
 	end
 	local key = cell:GetAttribute("Cell") :: string
 	local part = cell:GetAttribute("Part") :: string
 	local mode = Panel.GetMode()
-	if mode == "paint" then
+	local mirror = isFree() and Panel.GetMirror()
+	if mode == "build" then
+		-- 자유틀: 지우개면 떼기, 아니면 누른 면 옆에 붙이기
+		if Panel.GetBlock() == 0 then
+			send({ op = "remove", key = key, mirror = mirror })
+		else
+			local pos = neighborPos(cell, hit)
+			if pos then
+				send({ op = "add", pos = { pos.X, pos.Y, pos.Z }, block = chosenBlock(), mirror = mirror })
+			end
+		end
+	elseif mode == "paint" then
 		send({ op = "color", part = part, hex = Panel.GetColor() })
 	elseif mode == "shape" then
 		-- 같은 모양을 다시 누르면 다음 방향으로 돌린다
 		local want = Panel.GetShape()
 		local cur, rot = PlaneBuilder.cellShape(state.design, key, PlaneBuilder.frameShapeOf(state.design, key))
 		local nextRot = if cur == want then (rot + 1) % Config.BlockShapes.ROTATIONS else 0
-		send({ op = "shape", key = key, shape = `{want}:{nextRot}` })
+		send({ op = "shape", key = key, shape = `{want}:{nextRot}`, mirror = mirror })
 	elseif mode == "paintCell" then
-		send({ op = "paintCell", key = key, hex = Panel.GetColor() })
+		send({ op = "paintCell", key = key, hex = Panel.GetColor(), mirror = mirror })
 	elseif mode == "fill" then
 		send({ op = "fill", part = part, block = Panel.GetBlock() })
 	else
-		send({ op = "cell", key = key, block = Panel.GetBlock() })
+		send({ op = "cell", key = key, block = chosenBlock(), mirror = mirror })
 	end
 end
 
@@ -164,7 +206,7 @@ local function updateHover()
 	local n = 0
 	for _, p in (cell.Parent :: Instance):GetChildren() do
 		if p:IsA("BasePart") and p:GetAttribute("Cell") then
-			local match = if mode == "cell" or mode == "paintCell" or mode == "shape" then p:GetAttribute("Cell") == key else p:GetAttribute("Part") == part
+			local match = if mode ~= "paint" and mode ~= "fill" then p:GetAttribute("Cell") == key else p:GetAttribute("Part") == part
 			if match then
 				n += 1
 				local box = hoverBoxes[n]
@@ -184,6 +226,10 @@ end
 local function openParts()
 	local pad = myPad()
 	if not pad or not state or Parts.IsOpen() then
+		return
+	end
+	if isFree() then
+		Panel.Toast("자유틀은 부위 교체 없이 블록을 직접 붙이고 떼요", true)
 		return
 	end
 	if state.level < Editor.PARTS_LEVEL then
@@ -283,6 +329,21 @@ function EditorController:Start()
 		elseif name == "weapon" then
 			send({ op = "weapon", id = arg })
 		elseif name == "frame" then
+			-- 게임패스 틀인데 아직 없으면 구매 창 (번호가 없으면 Studio 안내)
+			local info = nil
+			for _, f in (state and state.frames) or {} do
+				if f.id == arg then
+					info = f
+				end
+			end
+			if info and info.pass and not state.freePass and state.level >= info.level then
+				if (state.passId or 0) > 0 then
+					MarketplaceService:PromptGamePassPurchase(player, state.passId)
+				else
+					Panel.Toast("자유틀은 게임패스 전용이에요 (Studio 테스트: /freepass)", true)
+				end
+				return
+			end
 			send({ op = "frame", id = arg })
 		elseif name == "slot" then
 			send({ op = "slot", index = arg })

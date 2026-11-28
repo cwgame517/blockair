@@ -43,7 +43,7 @@ function PlaneStats.compute(rawDesign: any): Stats
 	local weight = 0
 	local hardness = 0
 	local power = 0
-	for _, placed in PlaneBuilder.layout(design.frameId, design.parts) do
+	for _, placed in PlaneBuilder.layout(design) do
 		local block = PlaneBuilder.blockAt(design, placed.key)
 		count += 1
 		weight += block.weight
