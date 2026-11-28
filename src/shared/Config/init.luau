@@ -4,6 +4,8 @@ return {
 	Blocks = require(script.Blocks),
 	Levels = require(script.Levels),
 	Frames = require(script.Frames),
+	FrameShapes = require(script.FrameShapes),
+	Flight = require(script.Flight),
 	Upgrades = require(script.Upgrades),
 	Weapons = require(script.Weapons),
 	Mobs = require(script.Mobs),

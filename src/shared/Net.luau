@@ -10,6 +10,7 @@ local EVENTS = {
 	"ProfileLoaded", -- 서버 → 클라: 저장 데이터 요약 (레벨, 코인 등)
 	"StatsChanged", -- 서버 → 클라: 바뀐 값만
 	"LevelUp", -- 서버 → 클라: 새 레벨
+	"PlaneRequest", -- 클라 → 서버: 비행기 타기(true) / 내리기(false)
 }
 
 local FUNCTIONS = {
