@@ -282,6 +282,8 @@ function EditorController:Start()
 			send({ op = name })
 		elseif name == "weapon" then
 			send({ op = "weapon", id = arg })
+		elseif name == "frame" then
+			send({ op = "frame", id = arg })
 		elseif name == "slot" then
 			send({ op = "slot", index = arg })
 		elseif name == "parts" then

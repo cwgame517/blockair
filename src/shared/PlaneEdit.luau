@@ -287,6 +287,39 @@ function PlaneEdit.paintCell(design: any, key: string, hex: string?): boolean
 	return true
 end
 
+-- 틀 바꾸기 (기본틀 ↔ 확장 기본틀 등). 블록은 모두 창고로 돌아갔다가, 새 틀에 같은 블록을 먼저 다시 채운다.
+-- 부위 색은 그대로, 부위 모양은 새 틀의 첫 모양, 한 칸 색·모양은 지운다. 돌려줌: 기본 블록으로 남은 칸 수
+function PlaneEdit.setFrame(design: any, inv: any, frameId: string): number
+	local shape = Shapes.byId[frameId]
+	if not shape or design.frameId == frameId then
+		return 0
+	end
+	local back: { [number]: boolean } = {}
+	for _, id in design.cells do
+		back[id] = true
+	end
+	PlaneEdit.clearAll(design, inv)
+	design.frameId = frameId
+	local parts = {}
+	for _, partName in shape.partOrder do
+		parts[partName] = shape.variantOrder[1] or "A"
+	end
+	design.parts = parts
+	design.cellColors = {}
+	design.cellShapes = {}
+	local slots = PlaneBuilder.slots(design.frameId, design.parts)
+	if next(back) ~= nil then
+		fillEmpty(design, inv, slots, back, true)
+	end
+	local defaults = 0
+	for _, s in slots do
+		if not design.cells[s.key] then
+			defaults += 1
+		end
+	end
+	return defaults
+end
+
 -- 칸 모양 바꾸기 (대칭 칸도 같이). shape = "모양:회전". 성능은 그대로
 function PlaneEdit.setShape(design: any, key: string, shape: string): boolean
 	if not PlaneBuilder.parseShape(shape) then

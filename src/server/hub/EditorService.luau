@@ -153,6 +153,17 @@ local function rebuild(player: Player)
 	pad.display = model
 end
 
+-- 고를 수 있는 틀 목록 (등급 해금 레벨이 되면 기본틀·확장 기본틀 모두 무료)
+local function frameList(data: any)
+	local out = {}
+	for _, id in Shapes.order do
+		local shape = Shapes.byId[id]
+		local need = Config.Frames.byId[shape.class].unlockLevel
+		table.insert(out, { id = id, short = shape.short, unlocked = data.level >= need, level = need })
+	end
+	return out
+end
+
 -- 클라이언트에 보낼 에디터 상태
 local function snapshot(data: any)
 	local inv = {}
@@ -171,6 +182,7 @@ local function snapshot(data: any)
 		slots = Editor.SLOTS,
 		inventory = inv,
 		level = data.level,
+		frames = frameList(data),
 	}
 end
 
@@ -241,10 +253,28 @@ local function apply(player: Player, data: any, op: any): (boolean, string?, boo
 		PlaneEdit.paintPart(design, op.part, op.hex)
 		return true
 	elseif kind == "shape" then
-		if type(op.key) ~= "string" or type(op.shape) ~= "string" then
+		-- 칸 모양 직접 고르기는 자유 에디터(게임패스, 나중에) 전용
+		if not Editor.FREE_SHAPES or type(op.key) ~= "string" or type(op.shape) ~= "string" then
 			return false
 		end
 		return PlaneEdit.setShape(design, op.key, op.shape)
+	elseif kind == "frame" then
+		local shape = type(op.id) == "string" and Shapes.byId[op.id]
+		if not shape then
+			return false
+		end
+		local need = Config.Frames.byId[shape.class].unlockLevel
+		if data.level < need then
+			return false, `{shape.name}은 레벨 {need}에 열려요`, true
+		end
+		if design.frameId == op.id then
+			return true
+		end
+		local defaults = PlaneEdit.setFrame(design, inv, op.id)
+		if defaults > 0 and PlaneEdit.placedBlocks(design) > 0 then
+			return true, `{shape.name}으로 바꿨어요. 모자란 {defaults}칸은 기본 블록`
+		end
+		return true, `{shape.name}으로 바꿨어요`
 	elseif kind == "paintCell" then
 		-- hex 가 "" 이면 원래(부위) 색으로
 		if type(op.key) ~= "string" or type(op.hex) ~= "string" or (op.hex ~= "" and not PALETTE[op.hex]) then

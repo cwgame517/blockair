@@ -31,6 +31,8 @@ local modeButtons: { [string]: TextButton } = {}
 local weaponButtons: { [string]: TextButton } = {}
 local slotButtons: { TextButton } = {}
 local partsButton: TextButton
+local frameRow: Frame
+local frameButtons: { [string]: TextButton } = {}
 local flyButton: TextButton
 local heavyLabel: TextLabel
 local toastLabel: TextLabel
@@ -217,16 +219,16 @@ function EditorPanel.Mount(playerGui: Instance)
 	tools.BackgroundTransparency = 1
 	tools.Parent = bottom
 	hlist(tools, 6)
-	local modes = { { "cell", "한 칸", 62 }, { "fill", "부위 채우기", 92 }, { "shape", "모양", 58 }, { "paintCell", "칸 색칠", 74 }, { "paint", "부위 색칠", 84 } }
+	local modes = { { "cell", "한 칸", 66 }, { "fill", "부위 채우기", 96 }, { "paintCell", "칸 색칠", 80 }, { "paint", "부위 색칠", 88 } }
+	if Editor.FREE_SHAPES then -- 자유 에디터(나중에)에서만 칸 모양 고르기
+		table.insert(modes, 3, { "shape", "모양", 58 })
+	end
 	for i, m in modes do
 		local b = button(tools, m[2] :: string, GRAY, UDim2.fromOffset(m[3] :: number, 36))
 		b.LayoutOrder = i
 		modeButtons[m[1] :: string] = b
 		b.Activated:Connect(function()
 			mode = m[1] :: string
-			if mode == "shape" then
-				EditorPanel.Toast("모양을 고르고 칸을 누르세요. 다시 누르면 돌아가요")
-			end
 			renderModes()
 			renderHotbar()
 			EditorPanel.ModeChosen:Fire(mode)
@@ -269,7 +271,7 @@ function EditorPanel.Mount(playerGui: Instance)
 	local side = Instance.new("Frame")
 	side.AnchorPoint = Vector2.new(1, 0.5)
 	side.Position = UDim2.new(1, -10, 0.45, 0)
-	side.Size = UDim2.fromOffset(220, 342)
+	side.Size = UDim2.fromOffset(220, 376)
 	side.BackgroundColor3 = Widgets.PANEL
 	side.BackgroundTransparency = 0.15
 	side.Parent = gui
@@ -306,8 +308,18 @@ function EditorPanel.Mount(playerGui: Instance)
 		end)
 	end
 
+	local frow = Instance.new("Frame")
+	frow.Position = UDim2.fromOffset(12, 234)
+	frow.Size = UDim2.new(1, -24, 0, 30)
+	frow.BackgroundTransparency = 1
+	frow.Parent = side
+	hlist(frow, 4)
+	local fl = Widgets.label(frow, "틀", UDim2.fromOffset(24, 28), UDim2.new(), 14)
+	fl.LayoutOrder = 0
+	frameRow = frow
+
 	local srow = Instance.new("Frame")
-	srow.Position = UDim2.fromOffset(12, 234)
+	srow.Position = UDim2.fromOffset(12, 268)
 	srow.Size = UDim2.new(1, -24, 0, 30)
 	srow.BackgroundTransparency = 1
 	srow.Parent = side
@@ -323,11 +335,11 @@ function EditorPanel.Mount(playerGui: Instance)
 		end)
 	end
 
-	partsButton = button(side, "부위 교체", Color3.fromRGB(120, 90, 200), UDim2.new(1, -24, 0, 30), UDim2.fromOffset(12, 270))
+	partsButton = button(side, "부위 교체", Color3.fromRGB(120, 90, 200), UDim2.new(1, -24, 0, 30), UDim2.fromOffset(12, 304))
 	partsButton.Activated:Connect(function()
 		EditorPanel.Action:Fire("parts")
 	end)
-	flyButton = button(side, "시험 비행", Widgets.ACCENT, UDim2.new(1, -24, 0, 30), UDim2.fromOffset(12, 304))
+	flyButton = button(side, "시험 비행", Widgets.ACCENT, UDim2.new(1, -24, 0, 30), UDim2.fromOffset(12, 338))
 	flyButton.Activated:Connect(function()
 		EditorPanel.Action:Fire("fly")
 	end)
@@ -376,6 +388,21 @@ function EditorPanel.SetState(state: any)
 	end
 	for i, b in slotButtons do
 		b.BackgroundColor3 = if state.slot == i then Widgets.ACCENT else GRAY
+	end
+	-- 틀 버튼 (기본틀·확장틀). 처음 받을 때 만든다
+	for i, f in state.frames or {} do
+		local b = frameButtons[f.id]
+		if not b then
+			b = button(frameRow, f.short, GRAY, UDim2.fromOffset(74, 28))
+			b.TextSize = 13
+			b.LayoutOrder = i
+			frameButtons[f.id] = b
+			b.Activated:Connect(function()
+				EditorPanel.Action:Fire("frame", f.id)
+			end)
+		end
+		b.Text = if f.unlocked then f.short else `{f.short} Lv{f.level}`
+		b.BackgroundColor3 = if state.design.frameId == f.id then Widgets.ACCENT else GRAY
 	end
 	if state.level < Editor.PARTS_LEVEL then
 		partsButton.Text = `부위 교체 (레벨 {Editor.PARTS_LEVEL})`
