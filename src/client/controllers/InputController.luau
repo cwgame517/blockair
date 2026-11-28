@@ -5,6 +5,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
+local GuiService = game:GetService("GuiService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
@@ -23,14 +24,6 @@ local mobile = false
 local SINK_ACTION = "BlockAirFlightSink"
 local MOUSE_LOCK_STEP = "BlockAirMouseLock"
 
-local function playerControls(): any
-	local ok, controls = pcall(function()
-		local module = require(Players.LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule") :: ModuleScript) :: any
-		return module:GetControls()
-	end)
-	return if ok then controls else nil
-end
-
 function InputController:IsMobile(): boolean
 	return mobile
 end
@@ -41,12 +34,10 @@ function InputController:SetFlying(on: boolean, throttle: number?)
 		return
 	end
 	flying = on
-	local controls = playerControls()
 	if on then
-		-- 걷기·점프 조작을 끄고(모바일 기본 스틱·점프 버튼도 숨겨짐), 스페이스 점프로 내리지 않게 막는다
-		if controls then
-			controls:Disable()
-		end
+		-- 모바일 기본 스틱·점프 버튼을 숨기고, 스페이스 점프로 내리지 않게 막는다
+		-- (조종석에서는 W/A/S/D 걷기가 원래 동작하지 않는다)
+		GuiService.TouchControlsEnabled = false
 		ContextActionService:BindActionAtPriority(SINK_ACTION, function()
 			return Enum.ContextActionResult.Sink
 		end, false, Enum.ContextActionPriority.High.Value + 10, Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
@@ -60,9 +51,7 @@ function InputController:SetFlying(on: boolean, throttle: number?)
 			end)
 		end
 	else
-		if controls then
-			controls:Enable()
-		end
+		GuiService.TouchControlsEnabled = true
 		ContextActionService:UnbindAction(SINK_ACTION)
 		TouchControls.Hide()
 		RunService:UnbindFromRenderStep(MOUSE_LOCK_STEP)
