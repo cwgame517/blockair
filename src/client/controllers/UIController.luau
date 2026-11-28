@@ -49,12 +49,44 @@ function UIController:Start()
 		Net.event("CargoChanged").OnClientEvent:Connect(function(c)
 			hud.SetCargo(c.count, c.cap)
 		end)
+		Net.event("Hangar").OnClientEvent:Connect(function(kind: string, value: number?)
+			if kind == "deposit" then
+				hud.Toast(`+{value} 블록 보관됨!`)
+			elseif kind == "repairStart" then
+				hud.StartRepair(value or 3)
+			elseif kind == "repairStop" then
+				hud.StopRepair()
+			elseif kind == "repairDone" then
+				hud.StopRepair()
+				hud.Toast("수리 완료! HP 가득")
+			end
+		end)
 	else
+		local menu = require(ui:WaitForChild("HangarMenu") :: ModuleScript) :: any
+		menu.Mount(playerGui)
 		hud.OnSortie(function()
+			menu.Close()
 			Net.event("Sortie"):FireServer()
+		end)
+		hud.OnHangar(function()
+			menu.Toggle()
+		end)
+		FlightController.FlyingChanged:Connect(function(flying: boolean)
+			if flying then
+				menu.Close()
+			end
+		end)
+		Net.event("StatsChanged").OnClientEvent:Connect(function(stats)
+			menu.SetCoins(stats.coins)
 		end)
 	end
 
+	-- 비행기 HP (허브 화면은 아직 HP 막대가 없어서 무시)
+	Net.event("PlaneHp").OnClientEvent:Connect(function(hp: number, maxHp: number)
+		if hud.SetHp then
+			hud.SetHp(hp, maxHp)
+		end
+	end)
 	Net.event("Notify").OnClientEvent:Connect(function(text: string, warn: boolean?)
 		hud.Toast(text, warn)
 	end)

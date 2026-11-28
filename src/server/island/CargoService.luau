@@ -2,7 +2,8 @@
 -- 화물칸: 캔 몸통 블록이 들어가는 곳. 가득 차면 더 못 담고 블록은 사라진다.
 -- 보물(금광석·보석)은 화물칸 대신 바로 코인, 연료 블록은 연료(연료 기능은 다음 단계라 지금은 효과 없음).
 -- 비행기 아래에 작은 상자가 매달려 차오를수록 커지고, 가득 차면 금빛이 된다 (남들도 보임).
--- 허브로 돌아가거나 게임을 나가면 화물은 창고(인벤토리)로 들어간다. (3단계에서 격납고 맡기기로 바뀜)
+-- 격납고의 빛나는 구역에 들어가면 화물이 창고(저장 데이터 inventory)로 맡겨진다 (HangarService).
+-- 맡기지 않고 허브로 돌아가거나 게임을 나가면 화물은 사라진다.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -119,22 +120,28 @@ function CargoService:AddLoot(player: Player, items: { { number } })
 	push(player)
 end
 
--- 화물을 창고(저장 데이터 inventory)로 옮긴다. 기다리는 일이 없어서 나가기 직전에도 안전하다.
-function CargoService:MoveToInventory(player: Player)
+-- 화물을 창고(저장 데이터 inventory)로 맡긴다. 맡긴 개수를 돌려준다.
+function CargoService:Deposit(player: Player): number
 	local c = cargo[player]
 	local data = DataService:Get(player)
 	if not c or not data or c.count == 0 then
-		return
+		return 0
 	end
-	for id, n in c.items do
+	local n = c.count
+	for id, k in c.items do
 		local key = tostring(id)
-		data.inventory[key] = (data.inventory[key] or 0) + n
+		data.inventory[key] = (data.inventory[key] or 0) + k
 	end
 	c.count = 0
 	c.items = {}
-	if player.Parent then
-		push(player)
-	end
+	push(player)
+	return n
+end
+
+-- 지금 화물칸에 든 블록 수
+function CargoService:GetCount(player: Player): number
+	local c = cargo[player]
+	return if c then c.count else 0
 end
 
 function CargoService:Init(services)
@@ -153,9 +160,6 @@ function CargoService:Start()
 	end)
 	DataService.ProfileLoaded:Connect(function(player: Player)
 		push(player)
-	end)
-	DataService.PlayerLeaving:Connect(function(player: Player)
-		CargoService:MoveToInventory(player)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		task.defer(function()

@@ -1,5 +1,5 @@
 --!strict
--- 하늘 섬 UI: 레벨·코인, 화물칸 게이지("화물 32/50"), 알림,
+-- 하늘 섬 UI: 레벨·코인, 화물칸 게이지("화물 32/50"), 비행기 HP, 격납고 수리 막대, 알림,
 -- 내려 있을 때 "비행기 타기"·"허브로" 버튼, 날 때 폭탄 버튼(재장전 표시). 디자인은 8단계에서 다듬는다.
 local TweenService = game:GetService("TweenService")
 
@@ -16,6 +16,12 @@ local coinLabel: TextLabel
 local xpBar: { set: (number) -> () }
 local cargoLabel: TextLabel
 local cargoBar: { set: (number) -> (), fill: Frame }
+local hpPanel: Frame
+local hpLabel: TextLabel
+local hpBar: { set: (number) -> (), fill: Frame }
+local repairPanel: Frame
+local repairBar: { set: (number) -> (), fill: Frame }
+local repairTween: Tween? = nil
 local toast: TextLabel
 local buttons: Frame
 local bombButton: TextButton
@@ -75,6 +81,33 @@ function IslandHUD.Mount(playerGui: Instance)
 	Widgets.corner(cargo, 12)
 	cargoLabel = Widgets.label(cargo, "화물 0/50", UDim2.fromOffset(232, 20), UDim2.fromOffset(14, 4), 16)
 	cargoBar = Widgets.bar(cargo, UDim2.fromOffset(232, 12), UDim2.fromOffset(14, 27), Color3.fromRGB(190, 140, 80))
+
+	-- 그 아래: 비행기 HP (날 때만)
+	hpPanel = Instance.new("Frame")
+	hpPanel.Size = UDim2.fromOffset(260, 30)
+	hpPanel.AnchorPoint = Vector2.new(0.5, 0)
+	hpPanel.Position = UDim2.new(0.5, 0, 0, 150)
+	hpPanel.BackgroundColor3 = Widgets.PANEL
+	hpPanel.BackgroundTransparency = 0.15
+	hpPanel.Visible = false
+	hpPanel.Parent = gui
+	Widgets.corner(hpPanel, 10)
+	hpLabel = Widgets.label(hpPanel, "HP", UDim2.fromOffset(90, 30), UDim2.fromOffset(12, 0), 14)
+	hpBar = Widgets.bar(hpPanel, UDim2.fromOffset(150, 12), UDim2.fromOffset(98, 9), Color3.fromRGB(90, 210, 110))
+
+	-- 가운데: 격납고 수리 막대 (3초 동안 차오름)
+	repairPanel = Instance.new("Frame")
+	repairPanel.Size = UDim2.fromOffset(240, 54)
+	repairPanel.AnchorPoint = Vector2.new(0.5, 0.5)
+	repairPanel.Position = UDim2.fromScale(0.5, 0.62)
+	repairPanel.BackgroundColor3 = Widgets.PANEL
+	repairPanel.BackgroundTransparency = 0.15
+	repairPanel.Visible = false
+	repairPanel.Parent = gui
+	Widgets.corner(repairPanel, 12)
+	local repairLabel = Widgets.label(repairPanel, "수리 중...", UDim2.fromOffset(216, 22), UDim2.fromOffset(12, 4), 17)
+	repairLabel.TextXAlignment = Enum.TextXAlignment.Center
+	repairBar = Widgets.bar(repairPanel, UDim2.fromOffset(216, 14), UDim2.fromOffset(12, 32), Color3.fromRGB(90, 220, 255))
 
 	toast = Widgets.label(gui, "", UDim2.fromOffset(520, 48), UDim2.new(0.5, -260, 0, 200), 26)
 	toast.TextXAlignment = Enum.TextXAlignment.Center
@@ -153,6 +186,40 @@ end
 function IslandHUD.SetFlying(flying: boolean)
 	buttons.Visible = not flying
 	bombButton.Visible = flying
+	hpPanel.Visible = flying
+	if not flying then
+		IslandHUD.StopRepair()
+	end
+end
+
+function IslandHUD.SetHp(hp: number, maxHp: number)
+	local ratio = hp / math.max(maxHp, 1)
+	hpLabel.Text = `HP {math.floor(hp)}`
+	hpBar.set(ratio)
+	hpBar.fill.BackgroundColor3 = if ratio > 0.5
+		then Color3.fromRGB(90, 210, 110)
+		elseif ratio > 0.25 then Color3.fromRGB(240, 200, 60)
+		else RED
+end
+
+-- 격납고 수리: 막대가 seconds 동안 차오른다
+function IslandHUD.StartRepair(seconds: number)
+	if repairTween then
+		repairTween:Cancel()
+	end
+	repairPanel.Visible = true
+	repairBar.set(0)
+	local t = TweenService:Create(repairBar.fill, TweenInfo.new(seconds, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(1, 1) })
+	repairTween = t
+	t:Play()
+end
+
+function IslandHUD.StopRepair()
+	if repairTween then
+		repairTween:Cancel()
+		repairTween = nil
+	end
+	repairPanel.Visible = false
 end
 
 -- 폭탄 재장전: 버튼이 어두워졌다가 아래로 걷힌다

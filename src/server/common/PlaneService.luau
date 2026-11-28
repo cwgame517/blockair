@@ -17,14 +17,27 @@ local CHECK_INTERVAL = 0.5
 local PlaneService = {}
 PlaneService.Spawned = Signal.new() -- (player, model, stats)
 PlaneService.Despawned = Signal.new() -- (player)
+PlaneService.ShotDown = Signal.new() -- (player) HP 가 0 이 됨
 
-type Entry = { model: Model, seat: Seat, stats: any, maxSpeed: number, strikes: number, unseated: number }
+type Entry = {
+	model: Model,
+	seat: Seat,
+	stats: any,
+	maxSpeed: number,
+	strikes: number,
+	unseated: number,
+	hp: number,
+	maxHp: number,
+	lastHit: number,
+}
 
 local DataService: any
 local folder: Folder
 local planes: { [Player]: Entry } = {}
 local lastRequest: { [Player]: number } = {}
 local speedMul = 1 -- Studio 테스트 명령 /speed 로 바꾸는 속도 배율
+-- 내렸다 다시 타도 HP 가 그대로이도록 기억해 둔다 (수리는 격납고에서만). 격추되면 지움 → 다시 타면 가득
+local savedHp: { [Player]: number } = {}
 
 local function humanoidOf(player: Player): (Humanoid?, BasePart?)
 	local char = player.Character
@@ -46,14 +59,25 @@ local function designOf(player: Player): any
 	return saved or Config.FrameShapes.DEFAULT_DESIGN
 end
 
--- 내릴 때 돌아갈 곳: 맵의 SpawnLocation
-local function homeCFrame(): CFrame?
+-- 내릴 때 돌아갈 곳: 가장 가까운 SpawnLocation (섬에서는 가장 가까운 격납고)
+local function homeCFrame(from: Vector3): CFrame?
+	local best: CFrame? = nil
+	local bestDist = math.huge
 	for _, d in workspace:GetDescendants() do
 		if d:IsA("SpawnLocation") and d.Enabled then
-			return d.CFrame + Vector3.new(0, 4, 0)
+			local dist = (d.Position - from).Magnitude
+			if dist < bestDist then
+				best, bestDist = d.CFrame + Vector3.new(0, 4, 0), dist
+			end
 		end
 	end
-	return nil
+	return best
+end
+
+local function pushHp(player: Player, entry: Entry)
+	entry.model:SetAttribute("HP", entry.hp)
+	entry.model:SetAttribute("MaxHP", entry.maxHp)
+	Net.event("PlaneHp"):FireClient(player, entry.hp, entry.maxHp)
 end
 
 function PlaneService:Despawn(player: Player, sendHome: boolean)
@@ -62,14 +86,18 @@ function PlaneService:Despawn(player: Player, sendHome: boolean)
 		return
 	end
 	planes[player] = nil
+	if entry.hp > 0 then
+		savedHp[player] = entry.hp
+	end
 	PlaneService.Despawned:Fire(player)
 	local hum, hrp = humanoidOf(player)
 	if hum then
 		hum.Sit = false
 	end
+	local lastPos = entry.model:GetPivot().Position
 	entry.model:Destroy()
 	if sendHome and hrp and player.Character then
-		local home = homeCFrame()
+		local home = homeCFrame(lastPos)
 		if home then
 			player.Character:PivotTo(home)
 			hrp.AssemblyLinearVelocity = Vector3.zero
@@ -115,7 +143,21 @@ function PlaneService:Spawn(player: Player): boolean
 	seat:Sit(hum)
 	root:SetNetworkOwner(player)
 
-	planes[player] = { model = model, seat = seat, stats = stats, maxSpeed = stats.maxSpeed, strikes = 0, unseated = 0 }
+	local maxHp = math.floor(stats.hp)
+	local hp = math.clamp(savedHp[player] or maxHp, 1, maxHp)
+	local entry: Entry = {
+		model = model,
+		seat = seat,
+		stats = stats,
+		maxSpeed = stats.maxSpeed,
+		strikes = 0,
+		unseated = 0,
+		hp = hp,
+		maxHp = maxHp,
+		lastHit = 0,
+	}
+	planes[player] = entry
+	pushHp(player, entry)
 	PlaneService.Spawned:Fire(player, model, stats)
 	return true
 end
@@ -181,6 +223,44 @@ function PlaneService:SetSpeedPercent(percent: number)
 	end
 end
 
+-- HP 깎기. 0 이 되면 격추: 비행기가 사라지고 가장 가까운 격납고(스폰)로 돌아간다.
+-- (무기·몹은 6단계. 지금은 Studio 테스트 명령 /hurt 로만 깎인다)
+function PlaneService:Damage(player: Player, amount: number)
+	local entry = planes[player]
+	if not entry or amount <= 0 then
+		return
+	end
+	entry.hp = math.max(0, entry.hp - math.floor(amount))
+	entry.lastHit = os.clock()
+	pushHp(player, entry)
+	if entry.hp <= 0 then
+		savedHp[player] = nil
+		PlaneService.ShotDown:Fire(player)
+		PlaneService:Despawn(player, true)
+		Net.event("Notify"):FireClient(player, "격추됐어요! 다시 타면 HP 가 가득 차요", true)
+	end
+end
+
+-- HP 가득 채우기 (격납고 수리)
+function PlaneService:Repair(player: Player)
+	local entry = planes[player]
+	if not entry then
+		return
+	end
+	entry.hp = entry.maxHp
+	savedHp[player] = nil
+	pushHp(player, entry)
+end
+
+-- (HP, 최대 HP, 마지막으로 맞은 시각 os.clock). 비행기가 없으면 nil
+function PlaneService:GetHp(player: Player): (number?, number?, number?)
+	local entry = planes[player]
+	if not entry then
+		return nil, nil, nil
+	end
+	return entry.hp, entry.maxHp, entry.lastHit
+end
+
 -- 지금 타고 있는 비행기와 능력치 (없으면 nil)
 function PlaneService:Get(player: Player): (Model?, any)
 	local entry = planes[player]
@@ -231,6 +311,7 @@ function PlaneService:Start()
 	Players.PlayerRemoving:Connect(function(player)
 		PlaneService:Despawn(player, false)
 		lastRequest[player] = nil
+		savedHp[player] = nil
 	end)
 
 	local acc = 0
