@@ -127,7 +127,6 @@ local function start(plane: Model)
 	params.FilterDescendantsInstances = exclude
 
 	local state = FlightModel.newState(root.CFrame, stats)
-	local mobile = InputController:IsMobile()
 
 	local s: Session
 	local conn = RunService.PreSimulation:Connect(function(dt)
@@ -157,7 +156,8 @@ local function start(plane: Model)
 	session = s
 
 	InputController:SetFlying(true, state.throttle)
-	FlightHUD.Show(mobile)
+	FlightHUD.SetHint(InputController:GetHint())
+	FlightHUD.Show()
 	CameraController:FollowPlane(function()
 		if not root.Parent then
 			return nil, Vector3.zero, 0
@@ -216,6 +216,14 @@ function FlightController:Start()
 	FlightHUD.Mount(player:WaitForChild("PlayerGui"))
 	InputController.ToggleRequested:Connect(function()
 		FlightController:RequestToggle()
+	end)
+	-- M 키로 조작 방식을 바꾸면 안내 문구와 속도 슬라이더를 맞춘다
+	InputController.ModeChanged:Connect(function()
+		FlightHUD.SetHint(InputController:GetHint())
+		local s = session
+		if s then
+			InputController:SyncThrottle(s.state.throttle)
+		end
 	end)
 	player.CharacterAdded:Connect(hookCharacter)
 	if player.Character then

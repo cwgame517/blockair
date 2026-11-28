@@ -1,5 +1,6 @@
 --!strict
 -- 모바일 비행 조작 화면: 왼쪽 아래 스틱, 오른쪽 아래 속도 슬라이더, 위쪽 내리기 버튼.
+-- PC 에서는 마우스로 끌어서도 쓸 수 있다 (Studio 테스트용 화면 스틱 모드).
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -23,8 +24,9 @@ local slider: Frame
 local fill: Frame
 local sliderLabel: TextLabel
 
-local stickInput: InputObject? = nil
-local sliderInput: InputObject? = nil
+-- 지금 스틱·슬라이더를 잡고 있는 손가락(InputObject) 또는 "mouse"
+local stickInput: any = nil
+local sliderInput: any = nil
 local stick = Vector2.zero
 local throttle = 0
 
@@ -126,32 +128,52 @@ function TouchFlightControls.Mount(playerGui: Instance)
 		TouchFlightControls.ExitPressed:Fire()
 	end)
 
+	local function isPress(input: InputObject): boolean
+		return input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1
+	end
+	local function owner(input: InputObject): any
+		return if input.UserInputType == Enum.UserInputType.Touch then input else "mouse"
+	end
 	stickBase.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.Touch and not stickInput then
-			stickInput = input
+		if isPress(input) and not stickInput then
+			stickInput = owner(input)
 			updateStick(input.Position)
 		end
 	end)
 	slider.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.Touch and not sliderInput then
-			sliderInput = input
+		if isPress(input) and not sliderInput then
+			sliderInput = owner(input)
 			updateSlider(input.Position)
 		end
 	end)
-	UserInputService.TouchMoved:Connect(function(input)
-		if input == stickInput then
+	local function moved(input: InputObject)
+		local who = if input.UserInputType == Enum.UserInputType.MouseMovement then "mouse" else input
+		if who == stickInput then
 			updateStick(input.Position)
-		elseif input == sliderInput then
+		elseif who == sliderInput then
 			updateSlider(input.Position)
 		end
-	end)
-	UserInputService.TouchEnded:Connect(function(input)
-		if input == stickInput then
+	end
+	local function ended(input: InputObject)
+		local who = if input.UserInputType == Enum.UserInputType.MouseButton1 then "mouse" else input
+		if who == stickInput then
 			stickInput = nil
 			stick = Vector2.zero
 			knob.Position = UDim2.fromScale(0.5, 0.5)
-		elseif input == sliderInput then
+		elseif who == sliderInput then
 			sliderInput = nil
+		end
+	end
+	UserInputService.TouchMoved:Connect(moved)
+	UserInputService.TouchEnded:Connect(ended)
+	UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			moved(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			ended(input)
 		end
 	end)
 
@@ -177,6 +199,10 @@ end
 
 function TouchFlightControls.GetStick(): Vector2
 	return stick
+end
+
+function TouchFlightControls.SetThrottle(v: number)
+	setThrottle(v)
 end
 
 function TouchFlightControls.GetThrottle(): number
