@@ -2,6 +2,9 @@
 -- 허브 대용 맵. Studio 에서 만든 진짜 맵(workspace.HubMap)이 없을 때만 코드로 간단한 공항 섬을 만든다.
 -- 나중에 Studio 에서 맵을 만들어 이름을 "HubMap" 으로 두면 이 코드는 아무것도 하지 않는다.
 local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
 
 local HubMapService = {}
 
@@ -119,6 +122,15 @@ local function build()
 		local x = rng:NextNumber(20, 165)
 		local z = rng:NextNumber(-165, 165)
 		if math.abs(x - 60) < 20 and math.abs(z - 40) < 20 then
+			continue
+		end
+		-- 에디터 조립 자리(EditorService)에는 나무를 심지 않는다
+		local E = Config.Editor
+		local x0 = E.PAD_ORIGIN.X - E.PAD_SIZE / 2 - 4
+		local x1 = E.PAD_ORIGIN.X + (E.PAD_COLUMNS - 1) * E.PAD_GAP + E.PAD_SIZE / 2 + 4
+		local z0 = E.PAD_ORIGIN.Z - E.PAD_SIZE / 2 - 4
+		local z1 = E.PAD_ORIGIN.Z + (E.PAD_ROWS - 1) * E.PAD_GAP + E.PAD_SIZE / 2 + 4
+		if x > x0 and x < x1 and z > z0 and z < z1 then
 			continue
 		end
 		tree(Vector3.new(x, 0, z), rng)

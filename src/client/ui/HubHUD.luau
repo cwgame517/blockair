@@ -1,5 +1,5 @@
 --!strict
--- 허브 UI: 레벨·XP 바·코인, 비행기 타기·격납고·출격 버튼. (에디터 버튼은 4단계에서 붙인다)
+-- 허브 UI: 레벨·XP 바·코인, 비행기 타기·내 비행기(에디터)·격납고·출격 버튼.
 local TweenService = game:GetService("TweenService")
 
 local Widgets = require(script.Parent.components.Widgets)
@@ -16,10 +16,13 @@ local buttons: Frame
 local flyCallback: (() -> ())? = nil
 local sortieCallback: (() -> ())? = nil
 local hangarCallback: (() -> ())? = nil
+local editorCallback: (() -> ())? = nil
+local flying = false
+local editing = false
 
 local function button(parent: Instance, text: string, color: Color3, order: number): TextButton
 	local b = Instance.new("TextButton")
-	b.Size = UDim2.fromOffset(150, 50)
+	b.Size = UDim2.fromOffset(130, 50)
 	b.BackgroundColor3 = color
 	b.Font = Widgets.FONT
 	b.TextSize = 20
@@ -64,7 +67,7 @@ function HubHUD.Mount(playerGui: Instance)
 
 	-- 아래 가운데: 모바일의 기본 스틱(왼쪽)·점프 버튼(오른쪽)과 겹치지 않는 자리
 	buttons = Instance.new("Frame")
-	buttons.Size = UDim2.fromOffset(474, 50)
+	buttons.Size = UDim2.fromOffset(560, 50)
 	buttons.AnchorPoint = Vector2.new(0.5, 1)
 	buttons.Position = UDim2.new(0.5, 0, 1, -20)
 	buttons.BackgroundTransparency = 1
@@ -80,12 +83,17 @@ function HubHUD.Mount(playerGui: Instance)
 			flyCallback()
 		end
 	end)
-	button(buttons, "격납고", Color3.fromRGB(90, 100, 125), 2).Activated:Connect(function()
+	button(buttons, "내 비행기", Color3.fromRGB(120, 90, 200), 2).Activated:Connect(function()
+		if editorCallback then
+			editorCallback()
+		end
+	end)
+	button(buttons, "격납고", Color3.fromRGB(90, 100, 125), 3).Activated:Connect(function()
 		if hangarCallback then
 			hangarCallback()
 		end
 	end)
-	button(buttons, "출격", Color3.fromRGB(230, 120, 50), 3).Activated:Connect(function()
+	button(buttons, "출격", Color3.fromRGB(230, 120, 50), 4).Activated:Connect(function()
 		if sortieCallback then
 			sortieCallback()
 		end
@@ -106,9 +114,23 @@ function HubHUD.OnHangar(fn: () -> ())
 	hangarCallback = fn
 end
 
--- 비행 중에는 버튼을 숨긴다 (내리기는 F 키나 비행 화면의 버튼)
-function HubHUD.SetFlying(flying: boolean)
-	buttons.Visible = not flying
+function HubHUD.OnEditor(fn: () -> ())
+	editorCallback = fn
+end
+
+-- 비행 중(내리기는 F 키나 비행 화면의 버튼)과 에디터 화면이 떠 있을 때는 버튼을 숨긴다
+local function refreshButtons()
+	buttons.Visible = not flying and not editing
+end
+
+function HubHUD.SetFlying(on: boolean)
+	flying = on
+	refreshButtons()
+end
+
+function HubHUD.SetEditing(on: boolean)
+	editing = on
+	refreshButtons()
 end
 
 function HubHUD.Show()

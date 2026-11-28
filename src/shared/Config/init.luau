@@ -16,4 +16,6 @@ return {
 	Mining = require(script.Mining),
 	Places = require(script.Places),
 	Hangars = require(script.Hangars),
+	Editor = require(script.Editor),
+	BlockShapes = require(script.BlockShapes),
 }

@@ -7,6 +7,9 @@
 --   /power 5      (섬) 내 채굴력을 5로. 숫자 없이 쓰면 원래대로
 --   /give 100     창고(맡긴 블록)에 여러 가지 블록 100개 넣기 (팔기 테스트)
 --   /hurt 300     내 비행기 HP 300 깎기 (격납고 수리 테스트)
+--   /level 5      레벨을 5로 (부위 교체 테스트)
+--   /freepass     (허브) 자유틀 게임패스를 가진 것처럼 켜기/끄기
+--   /allblocks 20 (허브) 36종 블록을 종류마다 20개씩 창고에 넣기 (에디터 테스트)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -18,6 +21,14 @@ local ProgressService
 local DataService
 local PlaneService
 local MiningService
+local EditorService
+
+-- 허브 에디터 화면이 바뀐 창고·레벨을 바로 보이게
+local function refreshEditor(player: Player)
+	if EditorService then
+		EditorService:Push(player)
+	end
+end
 
 local function onChat(player: Player, message: string)
 	local cmd, arg = string.match(message, "^/(%a+)%s*(%-?%d*)")
@@ -59,6 +70,31 @@ local function onChat(player: Player, message: string)
 			d.inventory[key] = (d.inventory[key] or 0) + 1
 		end
 		print(`[Dev] {player.Name} 창고에 블록 {count}개`)
+		refreshEditor(player)
+	elseif cmd == "allblocks" then
+		local d = DataService:Get(player)
+		if not d then
+			return
+		end
+		local each = if arg ~= "" then math.clamp(n, 1, 10000) else 20
+		for _, b in Config.Blocks.list do
+			local key = tostring(b.id)
+			d.inventory[key] = (d.inventory[key] or 0) + each
+		end
+		print(`[Dev] {player.Name} 창고에 블록 36종 × {each}개`)
+		refreshEditor(player)
+	elseif cmd == "freepass" then
+		if not EditorService then
+			print("[Dev] /freepass 는 허브에서만 됩니다")
+			return
+		end
+		local on = not EditorService:HasPass(player)
+		EditorService:SetDevPass(player, on)
+		print(`[Dev] {player.Name} 자유틀 게임패스 {if on then "켬" else "끔"}`)
+	elseif cmd == "level" then
+		ProgressService:SetLevel(player, if arg ~= "" then n else 5)
+		print(`[Dev] {player.Name} 레벨 {ProgressService:GetLevel(player)}`)
+		refreshEditor(player)
 	elseif cmd == "hurt" then
 		PlaneService:Damage(player, if arg ~= "" then n else 300)
 		local hp, maxHp = PlaneService:GetHp(player)
@@ -80,6 +116,7 @@ function DevService:Init(services)
 	DataService = services.DataService
 	PlaneService = services.PlaneService
 	MiningService = services.MiningService -- 섬에만 있음
+	EditorService = services.EditorService -- 허브에만 있음
 end
 
 function DevService:Start()
