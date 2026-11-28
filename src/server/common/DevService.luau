@@ -3,12 +3,14 @@
 --   /coins 1000   코인 더하기 (음수면 빼기)
 --   /xp 500       XP 더하기
 --   /stats        내 레벨·코인 출력
+--   /speed 70     비행 속도를 기본의 70% 로 (10~300, 숫자 없이 쓰면 지금 값 출력)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local DevService = {}
 local ProgressService
 local DataService
+local PlaneService
 
 local function onChat(player: Player, message: string)
 	local cmd, arg = string.match(message, "^/(%a+)%s*(%-?%d*)")
@@ -22,6 +24,11 @@ local function onChat(player: Player, message: string)
 	elseif cmd == "xp" then
 		ProgressService:AddXp(player, n)
 		print(`[Dev] {player.Name} XP +{n}`)
+	elseif cmd == "speed" then
+		if arg ~= "" then
+			PlaneService:SetSpeedPercent(n)
+		end
+		print(`[Dev] 비행 속도 {PlaneService:GetSpeedPercent()}%`)
 	elseif cmd == "stats" then
 		local d = DataService:Get(player)
 		if d then
@@ -33,6 +40,7 @@ end
 function DevService:Init(services)
 	ProgressService = services.ProgressService
 	DataService = services.DataService
+	PlaneService = services.PlaneService
 end
 
 function DevService:Start()

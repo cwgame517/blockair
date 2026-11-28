@@ -21,6 +21,7 @@ local DataService: any
 local folder: Folder
 local planes: { [Player]: Entry } = {}
 local lastRequest: { [Player]: number } = {}
+local speedMul = 1 -- Studio 테스트 명령 /speed 로 바꾸는 속도 배율
 
 local function humanoidOf(player: Player): (Humanoid?, BasePart?)
 	local char = player.Character
@@ -84,6 +85,8 @@ function PlaneService:Spawn(player: Player): boolean
 
 	local design = PlaneBuilder.sanitize(designOf(player))
 	local stats = PlaneStats.compute(design)
+	stats.maxSpeed *= speedMul
+	stats.minSpeed *= speedMul
 	local model = PlaneBuilder.build(design)
 	model.Name = player.Name .. "_Plane"
 	model:SetAttribute("OwnerId", player.UserId)
@@ -158,6 +161,23 @@ local function check()
 			entry.strikes = math.max(0, entry.strikes - 1)
 		end
 	end
+end
+
+-- 속도 배율 바꾸기 (테스트용). 지금 날고 있는 비행기에도 바로 적용된다.
+function PlaneService:SetSpeedPercent(percent: number)
+	local newMul = math.clamp(percent, 10, 300) / 100
+	local ratio = newMul / speedMul
+	speedMul = newMul
+	for _, entry in planes do
+		entry.maxSpeed *= ratio
+		local m = entry.model
+		m:SetAttribute("MaxSpeed", (m:GetAttribute("MaxSpeed") :: number) * ratio)
+		m:SetAttribute("MinSpeed", (m:GetAttribute("MinSpeed") :: number) * ratio)
+	end
+end
+
+function PlaneService:GetSpeedPercent(): number
+	return math.floor(speedMul * 100 + 0.5)
 end
 
 function PlaneService:Init(services)

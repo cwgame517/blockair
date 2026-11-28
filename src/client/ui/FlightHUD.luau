@@ -46,7 +46,7 @@ function FlightHUD.Mount(playerGui: Instance)
 	speedLabel = Widgets.label(panel, "속도 0", UDim2.fromOffset(220, 20), UDim2.fromOffset(10, 4), 16)
 	speedBar = Widgets.bar(panel, UDim2.fromOffset(220, 10), UDim2.fromOffset(10, 28), Widgets.ACCENT)
 
-	hint = Widgets.label(gui, "마우스: 방향   W/S: 속도   F: 내리기", UDim2.fromOffset(400, 20), UDim2.new(0.5, -200, 1, -92), 15)
+	hint = Widgets.label(gui, "마우스·WASD: 방향   Shift/Ctrl: 속도   F: 내리기", UDim2.fromOffset(460, 20), UDim2.new(0.5, -230, 1, -92), 15)
 	hint.TextXAlignment = Enum.TextXAlignment.Center
 	hint.TextStrokeTransparency = 0.5
 

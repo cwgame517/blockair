@@ -9,7 +9,7 @@ return {
 	BASE_MAX_SPEED = 110, -- 기준 무게일 때 최고 속도
 	MIN_SPEED = 35, -- 자동 전진 최저 속도 (멈춰서 떨어지지 않음)
 	ACCELERATION = 45, -- 1초에 바뀌는 속도
-	THROTTLE_RATE = 0.7, -- W/S 를 1초 누르면 바뀌는 속도 레버 (0~1)
+	THROTTLE_RATE = 0.7, -- Shift/Ctrl 을 1초 누르면 바뀌는 속도 레버 (0~1)
 	START_THROTTLE = 0.35,
 
 	-- 무게: 기준 무게 = 틀 칸 수 × 이 값. 가벼우면 빠르고 잘 돈다.
@@ -29,6 +29,7 @@ return {
 
 	-- PC 조작
 	MOUSE_SENSITIVITY = 0.0035, -- 마우스 1픽셀당 조준 회전 (라디안)
+	KEY_TURN_RATE = 70, -- W/A/S/D 를 누르고 있을 때 1초에 도는 각도
 
 	-- 모바일 조작
 	STICK_TURN_RATE = 70, -- 스틱 끝까지 밀었을 때 1초에 도는 각도

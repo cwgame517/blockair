@@ -1,6 +1,6 @@
 --!strict
 -- PC 와 모바일 입력을 하나의 "비행 명령"(FlightModel.Command)으로 바꾼다.
---   PC  : 마우스로 조준 (마우스 잠금), W/S 속도, F 타기/내리기
+--   PC  : 마우스 또는 W/A/S/D(방향키)로 조준, Shift/Ctrl 속도, F 타기/내리기
 --   모바일: 왼쪽 스틱으로 조준, 오른쪽 슬라이더로 속도 (자동 전진)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -73,19 +73,27 @@ function InputController:GetCommand(dt: number): any
 		}
 	end
 
-	-- PC
+	-- PC: 마우스와 키보드를 같이 쓸 수 있다
+	--   W/S 또는 ↑/↓ : 위/아래,  A/D 또는 ←/→ : 왼쪽/오른쪽
+	--   Shift : 빨라지기,  Ctrl : 느려지기
+	local function key(...: Enum.KeyCode): boolean
+		for _, k in { ... } do
+			if UserInputService:IsKeyDown(k) then
+				return true
+			end
+		end
+		return false
+	end
+	local K = Enum.KeyCode
+	local right = (if key(K.D, K.Right) then 1 else 0) - (if key(K.A, K.Left) then 1 else 0)
+	local up = (if key(K.W, K.Up) then 1 else 0) - (if key(K.S, K.Down) then 1 else 0)
+	local faster = (if key(K.LeftShift, K.RightShift) then 1 else 0) - (if key(K.LeftControl, K.RightControl) then 1 else 0)
+	local rate = math.rad(Flight.KEY_TURN_RATE) * dt
 	local delta = UserInputService:GetMouseDelta()
-	local axis = 0
-	if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up) then
-		axis += 1
-	end
-	if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down) then
-		axis -= 1
-	end
 	return {
-		yaw = -delta.X * Flight.MOUSE_SENSITIVITY,
-		pitch = -delta.Y * Flight.MOUSE_SENSITIVITY,
-		throttleAxis = axis,
+		yaw = -delta.X * Flight.MOUSE_SENSITIVITY - right * rate,
+		pitch = -delta.Y * Flight.MOUSE_SENSITIVITY + up * rate,
+		throttleAxis = faster,
 		throttleSet = nil,
 	}
 end

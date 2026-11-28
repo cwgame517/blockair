@@ -135,6 +135,9 @@ local function start(plane: Model)
 			stop()
 			return
 		end
+		-- 테스트 명령(/speed)으로 속도가 바뀔 수 있어 매번 읽는다
+		stats.maxSpeed = plane:GetAttribute("MaxSpeed") :: number? or stats.maxSpeed
+		stats.minSpeed = plane:GetAttribute("MinSpeed") :: number? or stats.minSpeed
 		local cmd = InputController:GetCommand(dt)
 		local orientation, velocity = FlightModel.step(state, cmd, stats, dt)
 		velocity = avoid(s, velocity, dt)
