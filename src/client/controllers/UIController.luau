@@ -9,8 +9,11 @@ local UIController = {}
 
 local ui = script.Parent.Parent:WaitForChild("ui")
 local hud: any = nil
+local FlightController: any
 
-function UIController:Init(_controllers) end
+function UIController:Init(controllers)
+	FlightController = controllers.FlightController
+end
 
 function UIController:Start()
 	local kind = ReplicatedStorage:GetAttribute("PlaceKind")
@@ -24,6 +27,20 @@ function UIController:Start()
 	hud = require(screen :: ModuleScript)
 	hud.Mount(playerGui)
 	hud.Show()
+
+	-- 허브 버튼 연결 (섬 화면에는 없음)
+	if hud.OnFly then
+		hud.OnFly(function()
+			FlightController:RequestToggle()
+		end)
+		hud.OnSortie(function()
+			hud.Toast("출격은 다음 단계(하늘 섬)에서 열려요")
+		end)
+		FlightController.FlyingChanged:Connect(function(flying: boolean)
+			hud.SetFlying(flying)
+		end)
+		hud.SetFlying(FlightController:IsFlying())
+	end
 
 	Net.event("ProfileLoaded").OnClientEvent:Connect(function(stats)
 		hud.SetStats(stats)

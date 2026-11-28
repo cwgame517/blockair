@@ -1,5 +1,5 @@
 --!strict
--- 허브 UI: 레벨·XP 바·코인. (출격·에디터 버튼은 1~4단계에서 붙인다)
+-- 허브 UI: 레벨·XP 바·코인, 비행기 타기·출격 버튼. (에디터 버튼은 4단계에서 붙인다)
 local TweenService = game:GetService("TweenService")
 
 local Widgets = require(script.Parent.components.Widgets)
@@ -12,6 +12,24 @@ local xpLabel: TextLabel
 local coinLabel: TextLabel
 local xpBar: { set: (number) -> () }
 local toast: TextLabel
+local buttons: Frame
+local flyCallback: (() -> ())? = nil
+local sortieCallback: (() -> ())? = nil
+
+local function button(parent: Instance, text: string, color: Color3, order: number): TextButton
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(150, 50)
+	b.BackgroundColor3 = color
+	b.Font = Widgets.FONT
+	b.TextSize = 20
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Text = text
+	b.LayoutOrder = order
+	b.AutoButtonColor = true
+	b.Parent = parent
+	Widgets.corner(b, 12)
+	return b
+end
 
 function HubHUD.Mount(playerGui: Instance)
 	gui = Instance.new("ScreenGui")
@@ -43,7 +61,44 @@ function HubHUD.Mount(playerGui: Instance)
 	toast.TextColor3 = Widgets.GOLD
 	toast.TextTransparency = 1
 
+	-- 아래 가운데: 모바일의 기본 스틱(왼쪽)·점프 버튼(오른쪽)과 겹치지 않는 자리
+	buttons = Instance.new("Frame")
+	buttons.Size = UDim2.fromOffset(312, 50)
+	buttons.AnchorPoint = Vector2.new(0.5, 1)
+	buttons.Position = UDim2.new(0.5, 0, 1, -20)
+	buttons.BackgroundTransparency = 1
+	buttons.Parent = gui
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 12)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = buttons
+	button(buttons, "비행기 타기", Widgets.ACCENT, 1).Activated:Connect(function()
+		if flyCallback then
+			flyCallback()
+		end
+	end)
+	button(buttons, "출격", Color3.fromRGB(230, 120, 50), 2).Activated:Connect(function()
+		if sortieCallback then
+			sortieCallback()
+		end
+	end)
+
 	gui.Parent = playerGui
+end
+
+function HubHUD.OnFly(fn: () -> ())
+	flyCallback = fn
+end
+
+function HubHUD.OnSortie(fn: () -> ())
+	sortieCallback = fn
+end
+
+-- 비행 중에는 버튼을 숨긴다 (내리기는 F 키나 비행 화면의 버튼)
+function HubHUD.SetFlying(flying: boolean)
+	buttons.Visible = not flying
 end
 
 function HubHUD.Show()
@@ -72,12 +127,21 @@ function HubHUD.SetStats(stats: { level: number, xp: number, xpToNext: number, c
 	end
 end
 
-function HubHUD.ShowLevelUp(level: number, unlock: string?)
-	toast.Text = if unlock then `레벨 {level}! {unlock}` else `레벨 {level}!`
+local toastId = 0
+function HubHUD.Toast(text: string)
+	toastId += 1
+	local id = toastId
+	toast.Text = text
 	toast.TextTransparency = 0
 	task.delay(2.5, function()
-		TweenService:Create(toast, TweenInfo.new(0.6), { TextTransparency = 1 }):Play()
+		if id == toastId then
+			TweenService:Create(toast, TweenInfo.new(0.6), { TextTransparency = 1 }):Play()
+		end
 	end)
+end
+
+function HubHUD.ShowLevelUp(level: number, unlock: string?)
+	HubHUD.Toast(if unlock then `레벨 {level}! {unlock}` else `레벨 {level}!`)
 end
 
 return HubHUD

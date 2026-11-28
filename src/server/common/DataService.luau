@@ -63,7 +63,7 @@ local function keyOf(player: Player): string
 	return "u_" .. player.UserId
 end
 
-local function tryLoad(player: Player): (boolean, any)
+local function tryLoad(player: Player): (boolean, any, string?)
 	assert(store)
 	local result = nil
 	local blocked = false
@@ -82,7 +82,7 @@ local function tryLoad(player: Player): (boolean, any)
 	end)
 	if not ok then
 		warn(`[DataService] 불러오기 오류 {player.Name}: {err}`)
-		return false, nil
+		return false, nil, tostring(err)
 	end
 	if blocked then
 		return false, nil
@@ -115,9 +115,16 @@ local function onPlayerAdded(player: Player)
 	local data = nil
 	if store then
 		for _ = 1, LOAD_RETRIES do
-			local ok, result = tryLoad(player)
+			local ok, result, err = tryLoad(player)
 			if ok then
 				data = result
+				break
+			end
+			-- Studio에서 API 접근이 꺼져 있으면(403) 기다려도 소용없으니 저장 없이 진행
+			if RunService:IsStudio() and err and string.find(err, "403", 1, true) then
+				warn("[DataService] Studio API 접근이 꺼져 있어 저장 없이 진행합니다. (게임 설정 > 보안 > API 서비스 접근 켜기)")
+				noSave[player] = true
+				data = {}
 				break
 			end
 			if not player.Parent then
