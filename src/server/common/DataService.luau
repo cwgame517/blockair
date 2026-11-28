@@ -17,6 +17,7 @@ local LOAD_RETRY_WAIT = 5
 
 local DataService = {}
 DataService.ProfileLoaded = Signal.new() -- (player, data)
+DataService.PlayerLeaving = Signal.new() -- (player, data) 나가기 직전, 마지막 저장 전에 (화물 옮기기 등)
 
 local TEMPLATE = {
 	version = 1,
@@ -36,6 +37,7 @@ local TEMPLATE = {
 local store: DataStore? = nil
 local profiles: { [Player]: any } = {}
 local noSave: { [Player]: boolean } = {}
+local released: { [Player]: boolean } = {} -- 텔레포트하려고 잠금을 푼 플레이어: 더 저장하지 않는다
 
 local function deepCopy(t: any): any
 	if type(t) ~= "table" then
@@ -92,7 +94,7 @@ end
 
 local function save(player: Player, release: boolean)
 	local data = profiles[player]
-	if not data or noSave[player] or not store then
+	if not data or noSave[player] or released[player] or not store then
 		return
 	end
 	local ok, err = pcall(function()
@@ -167,9 +169,14 @@ function DataService:Start()
 		task.spawn(onPlayerAdded, p)
 	end
 	Players.PlayerRemoving:Connect(function(player)
+		local data = profiles[player]
+		if data then
+			DataService.PlayerLeaving:Fire(player, data) -- 듣는 쪽은 기다리지 않고 바로 끝나야 한다
+		end
 		save(player, true)
 		profiles[player] = nil
 		noSave[player] = nil
+		released[player] = nil
 	end)
 	game:BindToClose(function()
 		if RunService:IsStudio() and not store then
@@ -204,8 +211,15 @@ function DataService:Wait(player: Player): any
 end
 
 -- 텔레포트 직전처럼 꼭 지금 저장해야 할 때 (잠금도 풂)
+-- 이후로는 이 서버에서 저장하지 않는다 (다음 서버가 잠금을 가져가도록)
 function DataService:SaveAndRelease(player: Player)
 	save(player, true)
+	released[player] = true
+end
+
+-- 텔레포트가 실패해서 이 서버에 남을 때: 다시 저장하기 시작한다 (다음 자동 저장이 잠금을 다시 건다)
+function DataService:Unrelease(player: Player)
+	released[player] = nil
 end
 
 return DataService

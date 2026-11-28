@@ -12,4 +12,7 @@ return {
 	MapBlocks = require(script.MapBlocks),
 	Modes = require(script.Modes),
 	Islands = require(script.Islands),
+	BlockLooks = require(script.BlockLooks),
+	Mining = require(script.Mining),
+	Places = require(script.Places),
 }

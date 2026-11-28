@@ -9,13 +9,16 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PlaneBuilder = require(ReplicatedStorage.Shared.PlaneBuilder)
 local PlaneStats = require(ReplicatedStorage.Shared.PlaneStats)
+local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 
 local Flight = Config.Flight
 local CHECK_INTERVAL = 0.5
 
 local PlaneService = {}
+PlaneService.Spawned = Signal.new() -- (player, model, stats)
+PlaneService.Despawned = Signal.new() -- (player)
 
-type Entry = { model: Model, seat: Seat, maxSpeed: number, strikes: number, unseated: number }
+type Entry = { model: Model, seat: Seat, stats: any, maxSpeed: number, strikes: number, unseated: number }
 
 local DataService: any
 local folder: Folder
@@ -59,6 +62,7 @@ function PlaneService:Despawn(player: Player, sendHome: boolean)
 		return
 	end
 	planes[player] = nil
+	PlaneService.Despawned:Fire(player)
 	local hum, hrp = humanoidOf(player)
 	if hum then
 		hum.Sit = false
@@ -111,7 +115,8 @@ function PlaneService:Spawn(player: Player): boolean
 	seat:Sit(hum)
 	root:SetNetworkOwner(player)
 
-	planes[player] = { model = model, seat = seat, maxSpeed = stats.maxSpeed, strikes = 0, unseated = 0 }
+	planes[player] = { model = model, seat = seat, stats = stats, maxSpeed = stats.maxSpeed, strikes = 0, unseated = 0 }
+	PlaneService.Spawned:Fire(player, model, stats)
 	return true
 end
 
@@ -174,6 +179,15 @@ function PlaneService:SetSpeedPercent(percent: number)
 		m:SetAttribute("MaxSpeed", (m:GetAttribute("MaxSpeed") :: number) * ratio)
 		m:SetAttribute("MinSpeed", (m:GetAttribute("MinSpeed") :: number) * ratio)
 	end
+end
+
+-- 지금 타고 있는 비행기와 능력치 (없으면 nil)
+function PlaneService:Get(player: Player): (Model?, any)
+	local entry = planes[player]
+	if not entry then
+		return nil, nil
+	end
+	return entry.model, entry.stats
 end
 
 function PlaneService:GetSpeedPercent(): number

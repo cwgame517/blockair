@@ -128,10 +128,11 @@ function HubHUD.SetStats(stats: { level: number, xp: number, xpToNext: number, c
 end
 
 local toastId = 0
-function HubHUD.Toast(text: string)
+function HubHUD.Toast(text: string, warn: boolean?)
 	toastId += 1
 	local id = toastId
 	toast.Text = text
+	toast.TextColor3 = if warn then Color3.fromRGB(255, 110, 110) else Widgets.GOLD
 	toast.TextTransparency = 0
 	task.delay(2.5, function()
 		if id == toastId then

@@ -1,6 +1,6 @@
 --!strict
 -- 설계 데이터 → 비행기 능력치. 서버(소환·감시)와 클라이언트(에디터 막대)가 같은 식을 쓴다.
--- 1단계에서는 속도·회전·무게·HP 만 계산한다. 화력·채굴력은 5·6단계에서 더한다.
+-- 속도·회전·무게·HP·채굴력을 계산한다. 화력은 6단계에서 더한다.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -15,6 +15,7 @@ export type Stats = {
 	maxSpeed: number,
 	minSpeed: number,
 	turnRate: number, -- 도/초
+	minePower: number, -- 비행기 블록들의 평균 채굴력 (기본 나무 = 1)
 }
 
 local PlaneStats = {}
@@ -27,11 +28,13 @@ function PlaneStats.compute(rawDesign: any): Stats
 	local count = 0
 	local weight = 0
 	local hardness = 0
+	local power = 0
 	for _, placed in PlaneBuilder.layout(design.frameId, design.parts) do
 		local block = PlaneBuilder.blockAt(design, placed.index)
 		count += 1
 		weight += block.weight
 		hardness += block.hardness
+		power += block.minePower
 	end
 
 	local ref = frame.cells * Flight.REF_WEIGHT_PER_CELL
@@ -46,6 +49,7 @@ function PlaneStats.compute(rawDesign: any): Stats
 		maxSpeed = Flight.BASE_MAX_SPEED * speedMul,
 		minSpeed = Flight.MIN_SPEED,
 		turnRate = Flight.BASE_TURN_RATE * turnMul,
+		minePower = if count > 0 then power / count else 1,
 	}
 end
 

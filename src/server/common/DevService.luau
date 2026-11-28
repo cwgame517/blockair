@@ -4,6 +4,7 @@
 --   /xp 500       XP 더하기
 --   /stats        내 레벨·코인 출력
 --   /speed 70     비행 속도를 기본의 70% 로 (10~300, 숫자 없이 쓰면 지금 값 출력)
+--   /power 5      (섬) 내 채굴력을 5로. 숫자 없이 쓰면 원래대로
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -11,6 +12,7 @@ local DevService = {}
 local ProgressService
 local DataService
 local PlaneService
+local MiningService
 
 local function onChat(player: Player, message: string)
 	local cmd, arg = string.match(message, "^/(%a+)%s*(%-?%d*)")
@@ -29,6 +31,14 @@ local function onChat(player: Player, message: string)
 			PlaneService:SetSpeedPercent(n)
 		end
 		print(`[Dev] 비행 속도 {PlaneService:GetSpeedPercent()}%`)
+	elseif cmd == "power" then
+		if not MiningService then
+			print("[Dev] /power 는 원정 섬에서만 됩니다")
+			return
+		end
+		MiningService:SetDevPower(player, if arg ~= "" then math.max(n, 0.1) else nil)
+		local _, _, power = MiningService:GetStats(player)
+		print(`[Dev] {player.Name} 채굴력 {power}`)
 	elseif cmd == "stats" then
 		local d = DataService:Get(player)
 		if d then
@@ -41,6 +51,7 @@ function DevService:Init(services)
 	ProgressService = services.ProgressService
 	DataService = services.DataService
 	PlaneService = services.PlaneService
+	MiningService = services.MiningService -- 섬에만 있음
 end
 
 function DevService:Start()

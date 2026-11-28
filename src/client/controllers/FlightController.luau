@@ -38,6 +38,12 @@ function FlightController:IsFlying(): boolean
 	return session ~= nil
 end
 
+-- 지금 타고 있는 내 비행기 (없으면 nil)
+function FlightController:GetPlane(): Model?
+	local s = session
+	return if s then s.plane else nil
+end
+
 -- 타기/내리기 버튼·F 키
 function FlightController:RequestToggle()
 	if requestPending then
@@ -65,18 +71,21 @@ local function avoid(s: Session, velocity: Vector3, dt: number): Vector3
 			end
 		end
 	end
-	-- 하늘 경계
+	-- 하늘 경계 (섬 서버는 자기 경계를 ReplicatedStorage 속성으로 알려 줌)
+	local radius = ReplicatedStorage:GetAttribute("WorldRadius") :: number? or Flight.WORLD_RADIUS
+	local ceiling = ReplicatedStorage:GetAttribute("Ceiling") :: number? or Flight.CEILING
+	local floor = ReplicatedStorage:GetAttribute("Floor") :: number? or Flight.FLOOR
 	local flat = Vector3.new(pos.X, 0, pos.Z)
-	if flat.Magnitude > Flight.WORLD_RADIUS then
+	if flat.Magnitude > radius then
 		local out = flat.Unit
 		local into = velocity:Dot(out)
 		if into > 0 then
 			velocity -= out * into
 		end
 	end
-	if pos.Y > Flight.CEILING and velocity.Y > 0 then
+	if pos.Y > ceiling and velocity.Y > 0 then
 		velocity = Vector3.new(velocity.X, 0, velocity.Z)
-	elseif pos.Y < Flight.FLOOR and velocity.Y < 0 then
+	elseif pos.Y < floor and velocity.Y < 0 then
 		velocity = Vector3.new(velocity.X, 0, velocity.Z)
 	end
 	return velocity

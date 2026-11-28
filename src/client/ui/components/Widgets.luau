@@ -27,7 +27,7 @@ function Widgets.label(parent: Instance, text: string, size: UDim2, pos: UDim2, 
 	return l
 end
 
--- 가로 막대 게이지. set(0~1)로 채운다.
+-- 가로 막대 게이지. set(0~1)로 채운다. fill 은 채워지는 막대 (색을 바꿀 때)
 function Widgets.bar(parent: Instance, size: UDim2, pos: UDim2, color: Color3)
 	local back = Instance.new("Frame")
 	back.Size = size
@@ -43,6 +43,7 @@ function Widgets.bar(parent: Instance, size: UDim2, pos: UDim2, color: Color3)
 	fill.Parent = back
 	Widgets.corner(fill, 6)
 	return {
+		fill = fill,
 		set = function(ratio: number)
 			fill.Size = UDim2.fromScale(math.clamp(ratio, 0, 1), 1)
 		end,
