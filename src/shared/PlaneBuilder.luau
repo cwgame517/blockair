@@ -3,7 +3,9 @@
 --
 -- 설계 데이터 모양 (저장 데이터의 planes[n]):
 --   { frameId = "small_basic", parts = { nose = "A", wing = "A", tail = "A" },
---     cells = { ["nose:3"] = blockId }, colors = { body = "#RRGGBB", ... }, weapon = "cannon" }
+--     cells = { ["nose:3"] = blockId }, colors = { body = "#RRGGBB", ... }, cellColors = { ["nose:3"] = "#RRGGBB" },
+--     weapon = "cannon" }
+--   colors 는 부위 색, cellColors 는 한 칸만 따로 칠한 색 (있으면 부위 색보다 먼저)
 --   cells 에 없는 칸은 기본 블록(Flight.DEFAULT_BLOCK). 대칭 쌍은 칸 이름 하나에 블록 2개.
 --
 -- 만들어지는 모델:
@@ -24,7 +26,8 @@ local Looks = Config.BlockLooks
 local PlaneBuilder = {}
 
 -- key: 칸 이름 "부위:번호", count: 그 칸 이름이 차지하는 블록 수(대칭이면 2) — 같은 key 의 두 칸 모두 같은 값
-export type Placed = { key: string, part: string, pos: Vector3, count: number }
+-- shape: 칸 모양 ("wf" 등 FrameShapes 설명 참고, 없으면 네모). mirror: 왼쪽 거울 칸인지
+export type Placed = { key: string, part: string, pos: Vector3, count: number, shape: string?, mirror: boolean }
 
 local BLOCK_TINT = 0.3 -- 부위 색에 블록 고유색을 섞는 비율 (좋은 블록이 눈에 보이게)
 
@@ -47,9 +50,10 @@ function PlaneBuilder.layout(frameId: string, parts: { [string]: string }?): { P
 		for i, c in cells do
 			local key = partName .. ":" .. i
 			local count = if c[1] ~= 0 then 2 else 1
-			table.insert(out, { key = key, part = partName, pos = vec(c), count = count })
+			local shape = c[4]
+			table.insert(out, { key = key, part = partName, pos = vec(c), count = count, shape = shape, mirror = false })
 			if c[1] ~= 0 then
-				table.insert(out, { key = key, part = partName, pos = Vector3.new(-c[1], c[2], c[3]), count = count })
+				table.insert(out, { key = key, part = partName, pos = Vector3.new(-c[1], c[2], c[3]), count = count, shape = shape, mirror = true })
 			end
 		end
 	end
@@ -114,6 +118,14 @@ function PlaneBuilder.sanitize(design: any): any
 	for _, p in PlaneBuilder.layout(frameId, parts) do
 		valid[p.key] = true
 	end
+	local cellColors = {}
+	if type(d.cellColors) == "table" then
+		for k, v in d.cellColors do
+			if type(k) == "string" and valid[k] and validHex(v) then
+				cellColors[k] = v
+			end
+		end
+	end
 	local cells = {}
 	if type(d.cells) == "table" then
 		for k, v in d.cells do
@@ -126,7 +138,7 @@ function PlaneBuilder.sanitize(design: any): any
 	if type(weapon) ~= "string" or weapon == "bomb" or not Config.Weapons[weapon] then
 		weapon = Shapes.DEFAULT_DESIGN.weapon
 	end
-	return { frameId = frameId, parts = parts, cells = cells, colors = colors, weapon = weapon }
+	return { frameId = frameId, parts = parts, cells = cells, colors = colors, cellColors = cellColors, weapon = weapon }
 end
 
 -- 블록 하나의 겉모습: 부위 색에 블록 고유색을 조금 섞고, 재질은 블록 것
@@ -136,8 +148,41 @@ function PlaneBuilder.blockLook(block: any, partHex: string): (Color3, Enum.Mate
 	return color, look.material
 end
 
-local function newPart(name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material): Part
-	local p = Instance.new("Part")
+-- 칸의 색: 한 칸 색이 있으면 그것, 없으면 부위 색
+function PlaneBuilder.cellHex(design: any, key: string, part: string): string
+	local c = design.cellColors and design.cellColors[key]
+	return if type(c) == "string" then c else design.colors[part]
+end
+
+-- 경사 블록(WedgePart) 방향. 기본 WedgePart 는 비탈면이 앞(-z)·위를 본다.
+-- 오른쪽 칸 기준 회전이고, 왼쪽 거울 칸은 좌우로 뒤집는다.
+local WEDGE_YAW: { [string]: number } = {
+	wf = 0, -- 비탈이 앞을 봄 (기수 끝, 날개 앞전)
+	wb = 180, -- 비탈이 뒤를 봄 (꼬리 끝)
+	wo = -90, -- 비탈이 바깥(오른쪽)을 봄 (날개 끝)
+	wfd = 0, -- 앞·아래 (기수 아래)
+	wbd = 180, -- 뒤·아래 (몸통 아래 뒤쪽)
+}
+
+local function cellCFrame(placed: Placed, cell: number): CFrame
+	local cf = CFrame.new(placed.pos * cell)
+	local shape = placed.shape
+	if not shape or WEDGE_YAW[shape] == nil then
+		return cf
+	end
+	local yaw = WEDGE_YAW[shape]
+	if placed.mirror then
+		yaw = -yaw
+	end
+	cf *= CFrame.Angles(0, math.rad(yaw), 0)
+	if string.sub(shape, -1) == "d" then
+		cf *= CFrame.Angles(0, 0, math.pi) -- 뒤집어서 비탈이 아래를 보게
+	end
+	return cf
+end
+
+local function newPart(name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material, className: string?): BasePart
+	local p = Instance.new((className or "Part") :: any) :: BasePart
 	p.Name = name
 	p.Size = size
 	p.CFrame = cf
@@ -193,8 +238,9 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 
 	for _, placed in PlaneBuilder.layout(design.frameId, design.parts) do
 		local block = PlaneBuilder.blockAt(design, placed.key)
-		local color, material = PlaneBuilder.blockLook(block, design.colors[placed.part])
-		local p = newPart("C_" .. placed.key, Vector3.new(cell, cell, cell), CFrame.new(placed.pos * cell), color, material)
+		local color, material = PlaneBuilder.blockLook(block, PlaneBuilder.cellHex(design, placed.key, placed.part))
+		local isWedge = placed.shape ~= nil and WEDGE_YAW[placed.shape] ~= nil
+		local p = newPart("C_" .. placed.key, Vector3.new(cell, cell, cell), cellCFrame(placed, cell), color, material, if isWedge then "WedgePart" else nil)
 		p:SetAttribute("Cell", placed.key)
 		p:SetAttribute("Part", placed.part)
 		p:SetAttribute("BlockId", block.id)
@@ -235,7 +281,7 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 		Color3.fromRGB(70, 74, 84),
 		Enum.Material.Metal
 	)
-	booster.Shape = Enum.PartType.Cylinder
+	(booster :: Part).Shape = Enum.PartType.Cylinder
 	booster.Parent = model
 	attach(booster)
 	local flame = newPart(
@@ -245,7 +291,7 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 		Color3.fromRGB(255, 150, 40),
 		Enum.Material.Neon
 	)
-	flame.Shape = Enum.PartType.Cylinder
+	(flame :: Part).Shape = Enum.PartType.Cylinder
 	flame.Parent = model
 	attach(flame)
 

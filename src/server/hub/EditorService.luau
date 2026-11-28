@@ -238,8 +238,14 @@ local function apply(player: Player, data: any, op: any): (boolean, string?, boo
 		if not validPart(design, op.part) or type(op.hex) ~= "string" or not PALETTE[op.hex] then
 			return false
 		end
-		design.colors[op.part] = op.hex
+		PlaneEdit.paintPart(design, op.part, op.hex)
 		return true
+	elseif kind == "paintCell" then
+		-- hex 가 "" 이면 원래(부위) 색으로
+		if type(op.key) ~= "string" or type(op.hex) ~= "string" or (op.hex ~= "" and not PALETTE[op.hex]) then
+			return false
+		end
+		return PlaneEdit.paintCell(design, op.key, if op.hex == "" then nil else op.hex)
 	elseif kind == "weapon" then
 		if type(op.id) ~= "string" or not WEAPONS[op.id] then
 			return false

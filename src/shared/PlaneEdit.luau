@@ -215,6 +215,9 @@ function PlaneEdit.setParts(design: any, inv: any, newParts: { [string]: string 
 				back[id] = true
 				design.cells[s.key] = nil
 			end
+			if design.cellColors then
+				design.cellColors[s.key] = nil -- 한 칸 색은 칸이 없어지니 지움 (부위 색은 그대로)
+			end
 		end
 		design.parts[part] = want
 		local slots = PlaneBuilder.slots(design.frameId, design.parts, part)
@@ -253,6 +256,32 @@ function PlaneEdit.switchSlot(cur: any, target: any, inv: any): number
 		end
 	end
 	return missing
+end
+
+-- 부위 색칠: 부위 색을 바꾸고, 그 부위에서 한 칸씩 칠한 색은 지운다 (부위 전체가 같은 색이 되게)
+function PlaneEdit.paintPart(design: any, part: string, hex: string)
+	design.colors[part] = hex
+	if design.cellColors then
+		for _, s in PlaneBuilder.slots(design.frameId, design.parts, part) do
+			design.cellColors[s.key] = nil
+		end
+	end
+end
+
+-- 한 칸 색칠 (대칭 칸도 같이). hex 가 nil 이면 부위 색으로 되돌림
+function PlaneEdit.paintCell(design: any, key: string, hex: string?): boolean
+	local ok = false
+	for _, s in PlaneBuilder.slots(design.frameId, design.parts) do
+		if s.key == key then
+			ok = true
+		end
+	end
+	if not ok then
+		return false
+	end
+	design.cellColors = design.cellColors or {}
+	design.cellColors[key] = hex
+	return true
 end
 
 -- 설계에 실제로 들어 있는 블록 수

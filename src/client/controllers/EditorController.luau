@@ -127,6 +127,8 @@ local function onPress(screenPos: Vector2)
 	local mode = Panel.GetMode()
 	if mode == "paint" then
 		send({ op = "color", part = part, hex = Panel.GetColor() })
+	elseif mode == "paintCell" then
+		send({ op = "paintCell", key = key, hex = Panel.GetColor() })
 	elseif mode == "fill" then
 		send({ op = "fill", part = part, block = Panel.GetBlock() })
 	else
@@ -155,7 +157,7 @@ local function updateHover()
 	local n = 0
 	for _, p in (cell.Parent :: Instance):GetChildren() do
 		if p:IsA("BasePart") and p:GetAttribute("Cell") then
-			local match = if mode == "cell" then p:GetAttribute("Cell") == key else p:GetAttribute("Part") == part
+			local match = if mode == "cell" or mode == "paintCell" then p:GetAttribute("Cell") == key else p:GetAttribute("Part") == part
 			if match then
 				n += 1
 				local box = hoverBoxes[n]

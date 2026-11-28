@@ -1,6 +1,6 @@
 --!strict
 -- 허브 에디터 화면 (내 조립 자리 근처에 서 있을 때만 보임).
---   아래: 도구 [한 칸] [부위 채우기] [색칠] [자동 채우기] [모두 빼기] + 블록 단축바(또는 색 목록)
+--   아래: 도구 [한 칸] [부위 채우기] [칸 색칠] [부위 색칠] [자동 채우기] [모두 빼기] + 블록 단축바(또는 색 목록)
 --   오른쪽: 속도·튼튼함·화력·채굴력 막대, 무기 고르기, 설계 1·2·3, [부위 교체] [시험 비행]
 -- 화면은 그리기만 하고, 누르면 EditorController 에 알린다. 디자인은 8단계에서 다듬는다.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,9 +14,9 @@ local Widgets = require(script.Parent.components.Widgets)
 local Editor = Config.Editor
 
 local EditorPanel = {}
-EditorPanel.ModeChosen = Signal.new() -- (mode: "cell" | "fill" | "paint")
+EditorPanel.ModeChosen = Signal.new() -- (mode: "cell" | "fill" | "paintCell" | "paint")
 EditorPanel.BlockChosen = Signal.new() -- (blockId: number) 0 = 빼기
-EditorPanel.ColorChosen = Signal.new() -- (hex: string)
+EditorPanel.ColorChosen = Signal.new() -- (hex: string) "" = 원래 색(칸 색칠만)
 EditorPanel.Action = Signal.new() -- (name: "auto" | "clear" | "parts" | "fly") 또는 ("weapon", id) / ("slot", n)
 
 local GRAY = Color3.fromRGB(80, 88, 105)
@@ -90,7 +90,22 @@ local function renderHotbar()
 			c:Destroy()
 		end
 	end
-	if mode == "paint" then
+	if mode == "paint" or mode == "paintCell" then
+		if selectedColor == "" and mode == "paint" then
+			selectedColor = Editor.PALETTE[1]
+		end
+		if mode == "paintCell" then
+			-- 칸 색을 지우고 부위 색으로 되돌리는 칸
+			local reset = button(hotbar, "원래 색", GRAY, UDim2.fromOffset(64, 56))
+			reset.LayoutOrder = 0
+			reset.TextSize = 13
+			stroke(reset, selectedColor == "")
+			reset.Activated:Connect(function()
+				selectedColor = ""
+				EditorPanel.ColorChosen:Fire("")
+				renderHotbar()
+			end)
+		end
 		for i, hex in Editor.PALETTE do
 			local b = button(hotbar, "", Color3.fromHex(hex), UDim2.fromOffset(56, 56))
 			b.LayoutOrder = i
@@ -187,29 +202,29 @@ function EditorPanel.Mount(playerGui: Instance)
 	tools.BackgroundTransparency = 1
 	tools.Parent = bottom
 	hlist(tools, 6)
-	local modes = { { "cell", "한 칸" }, { "fill", "부위 채우기" }, { "paint", "색칠" } }
+	local modes = { { "cell", "한 칸", 70 }, { "fill", "부위 채우기", 100 }, { "paintCell", "칸 색칠", 80 }, { "paint", "부위 색칠", 90 } }
 	for i, m in modes do
-		local b = button(tools, m[2], GRAY, UDim2.fromOffset(if i == 2 then 110 else 80, 36))
+		local b = button(tools, m[2] :: string, GRAY, UDim2.fromOffset(m[3] :: number, 36))
 		b.LayoutOrder = i
-		modeButtons[m[1]] = b
+		modeButtons[m[1] :: string] = b
 		b.Activated:Connect(function()
-			mode = m[1]
+			mode = m[1] :: string
 			renderModes()
 			renderHotbar()
 			EditorPanel.ModeChosen:Fire(mode)
 		end)
 	end
 	local gap = Instance.new("Frame")
-	gap.Size = UDim2.fromOffset(18, 36)
+	gap.Size = UDim2.fromOffset(8, 36)
 	gap.BackgroundTransparency = 1
 	gap.LayoutOrder = 10
 	gap.Parent = tools
-	local auto = button(tools, "자동 채우기", GREEN, UDim2.fromOffset(110, 36))
+	local auto = button(tools, "자동 채우기", GREEN, UDim2.fromOffset(104, 36))
 	auto.LayoutOrder = 11
 	auto.Activated:Connect(function()
 		EditorPanel.Action:Fire("auto")
 	end)
-	local clear = button(tools, "모두 빼기", GRAY, UDim2.fromOffset(100, 36))
+	local clear = button(tools, "모두 빼기", GRAY, UDim2.fromOffset(92, 36))
 	clear.LayoutOrder = 12
 	clear.Activated:Connect(function()
 		EditorPanel.Action:Fire("clear")
