@@ -1,6 +1,6 @@
 --!strict
 -- 허브 에디터 화면 (내 조립 자리 근처에 서 있을 때만 보임).
---   아래: 도구 [한 칸] [부위 채우기] [칸 색칠] [부위 색칠] [자동 채우기] [모두 빼기] + 블록 단축바(또는 색 목록)
+--   아래: 도구 [한 칸] [부위 채우기] [모양] [칸 색칠] [부위 색칠] [자동 채우기] [모두 빼기] + 블록 단축바(또는 색 목록)
 --   오른쪽: 속도·튼튼함·화력·채굴력 막대, 무기 고르기, 설계 1·2·3, [부위 교체] [시험 비행]
 -- 화면은 그리기만 하고, 누르면 EditorController 에 알린다. 디자인은 8단계에서 다듬는다.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +14,7 @@ local Widgets = require(script.Parent.components.Widgets)
 local Editor = Config.Editor
 
 local EditorPanel = {}
-EditorPanel.ModeChosen = Signal.new() -- (mode: "cell" | "fill" | "paintCell" | "paint")
+EditorPanel.ModeChosen = Signal.new() -- (mode: "cell" | "fill" | "shape" | "paintCell" | "paint")
 EditorPanel.BlockChosen = Signal.new() -- (blockId: number) 0 = 빼기
 EditorPanel.ColorChosen = Signal.new() -- (hex: string) "" = 원래 색(칸 색칠만)
 EditorPanel.Action = Signal.new() -- (name: "auto" | "clear" | "parts" | "fly") 또는 ("weapon", id) / ("slot", n)
@@ -39,6 +39,7 @@ local bars: { [string]: any } = {}
 local mode = "cell"
 local selectedBlock = 0
 local selectedColor = Editor.PALETTE[1]
+local selectedShape = "wedge"
 local inventory: { { id: number, count: number } } = {}
 
 local function button(parent: Instance, text: string, color: Color3, size: UDim2, pos: UDim2?): TextButton
@@ -89,6 +90,20 @@ local function renderHotbar()
 		if c:IsA("GuiObject") then
 			c:Destroy()
 		end
+	end
+	if mode == "shape" then
+		for i, def in Config.BlockShapes.list do
+			local b = button(hotbar, def.name, DARK, UDim2.fromOffset(72, 56))
+			b.LayoutOrder = i
+			b.TextSize = 13
+			b.TextWrapped = true
+			stroke(b, def.id == selectedShape)
+			b.Activated:Connect(function()
+				selectedShape = def.id
+				renderHotbar()
+			end)
+		end
+		return
 	end
 	if mode == "paint" or mode == "paintCell" then
 		if selectedColor == "" and mode == "paint" then
@@ -202,13 +217,16 @@ function EditorPanel.Mount(playerGui: Instance)
 	tools.BackgroundTransparency = 1
 	tools.Parent = bottom
 	hlist(tools, 6)
-	local modes = { { "cell", "한 칸", 70 }, { "fill", "부위 채우기", 100 }, { "paintCell", "칸 색칠", 80 }, { "paint", "부위 색칠", 90 } }
+	local modes = { { "cell", "한 칸", 62 }, { "fill", "부위 채우기", 92 }, { "shape", "모양", 58 }, { "paintCell", "칸 색칠", 74 }, { "paint", "부위 색칠", 84 } }
 	for i, m in modes do
 		local b = button(tools, m[2] :: string, GRAY, UDim2.fromOffset(m[3] :: number, 36))
 		b.LayoutOrder = i
 		modeButtons[m[1] :: string] = b
 		b.Activated:Connect(function()
 			mode = m[1] :: string
+			if mode == "shape" then
+				EditorPanel.Toast("모양을 고르고 칸을 누르세요. 다시 누르면 돌아가요")
+			end
 			renderModes()
 			renderHotbar()
 			EditorPanel.ModeChosen:Fire(mode)
@@ -219,12 +237,12 @@ function EditorPanel.Mount(playerGui: Instance)
 	gap.BackgroundTransparency = 1
 	gap.LayoutOrder = 10
 	gap.Parent = tools
-	local auto = button(tools, "자동 채우기", GREEN, UDim2.fromOffset(104, 36))
+	local auto = button(tools, "자동 채우기", GREEN, UDim2.fromOffset(96, 36))
 	auto.LayoutOrder = 11
 	auto.Activated:Connect(function()
 		EditorPanel.Action:Fire("auto")
 	end)
-	local clear = button(tools, "모두 빼기", GRAY, UDim2.fromOffset(92, 36))
+	local clear = button(tools, "모두 빼기", GRAY, UDim2.fromOffset(84, 36))
 	clear.LayoutOrder = 12
 	clear.Activated:Connect(function()
 		EditorPanel.Action:Fire("clear")
@@ -336,6 +354,10 @@ end
 
 function EditorPanel.GetBlock(): number
 	return selectedBlock
+end
+
+function EditorPanel.GetShape(): string
+	return selectedShape
 end
 
 function EditorPanel.GetColor(): string

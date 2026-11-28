@@ -216,7 +216,10 @@ function PlaneEdit.setParts(design: any, inv: any, newParts: { [string]: string 
 				design.cells[s.key] = nil
 			end
 			if design.cellColors then
-				design.cellColors[s.key] = nil -- 한 칸 색은 칸이 없어지니 지움 (부위 색은 그대로)
+				design.cellColors[s.key] = nil -- 한 칸 색·모양은 칸이 없어지니 지움 (부위 색은 그대로)
+			end
+			if design.cellShapes then
+				design.cellShapes[s.key] = nil
 			end
 		end
 		design.parts[part] = want
@@ -281,6 +284,26 @@ function PlaneEdit.paintCell(design: any, key: string, hex: string?): boolean
 	end
 	design.cellColors = design.cellColors or {}
 	design.cellColors[key] = hex
+	return true
+end
+
+-- 칸 모양 바꾸기 (대칭 칸도 같이). shape = "모양:회전". 성능은 그대로
+function PlaneEdit.setShape(design: any, key: string, shape: string): boolean
+	if not PlaneBuilder.parseShape(shape) then
+		return false
+	end
+	local ok = false
+	for _, s in PlaneBuilder.slots(design.frameId, design.parts) do
+		if s.key == key then
+			ok = true
+		end
+	end
+	if not ok then
+		return false
+	end
+	design.cellShapes = design.cellShapes or {}
+	-- 틀에 정해진 처음 모양과 같으면 기억할 필요 없음
+	design.cellShapes[key] = if PlaneBuilder.frameShapeOf(design, key) == shape then nil else shape
 	return true
 end
 

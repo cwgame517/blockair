@@ -6,6 +6,7 @@
 --     cells = { ["nose:3"] = blockId }, colors = { body = "#RRGGBB", ... }, cellColors = { ["nose:3"] = "#RRGGBB" },
 --     weapon = "cannon" }
 --   colors 는 부위 색, cellColors 는 한 칸만 따로 칠한 색 (있으면 부위 색보다 먼저)
+--   cellShapes = { ["nose:3"] = "wedge:2" } 에디터에서 바꾼 칸 모양 (없으면 틀에 정해진 모양)
 --   cells 에 없는 칸은 기본 블록(Flight.DEFAULT_BLOCK). 대칭 쌍은 칸 이름 하나에 블록 2개.
 --
 -- 만들어지는 모델:
@@ -26,7 +27,7 @@ local Looks = Config.BlockLooks
 local PlaneBuilder = {}
 
 -- key: 칸 이름 "부위:번호", count: 그 칸 이름이 차지하는 블록 수(대칭이면 2) — 같은 key 의 두 칸 모두 같은 값
--- shape: 칸 모양 ("wf" 등 FrameShapes 설명 참고, 없으면 네모). mirror: 왼쪽 거울 칸인지
+-- shape: 틀에 정해진 칸 모양 "모양:회전" (없으면 사각형). mirror: 왼쪽 거울 칸인지
 export type Placed = { key: string, part: string, pos: Vector3, count: number, shape: string?, mirror: boolean }
 
 local BLOCK_TINT = 0.3 -- 부위 색에 블록 고유색을 섞는 비율 (좋은 블록이 눈에 보이게)
@@ -126,6 +127,14 @@ function PlaneBuilder.sanitize(design: any): any
 			end
 		end
 	end
+	local cellShapes = {}
+	if type(d.cellShapes) == "table" then
+		for k, v in d.cellShapes do
+			if type(k) == "string" and valid[k] and PlaneBuilder.parseShape(v) then
+				cellShapes[k] = v
+			end
+		end
+	end
 	local cells = {}
 	if type(d.cells) == "table" then
 		for k, v in d.cells do
@@ -138,7 +147,7 @@ function PlaneBuilder.sanitize(design: any): any
 	if type(weapon) ~= "string" or weapon == "bomb" or not Config.Weapons[weapon] then
 		weapon = Shapes.DEFAULT_DESIGN.weapon
 	end
-	return { frameId = frameId, parts = parts, cells = cells, colors = colors, cellColors = cellColors, weapon = weapon }
+	return { frameId = frameId, parts = parts, cells = cells, colors = colors, cellColors = cellColors, cellShapes = cellShapes, weapon = weapon }
 end
 
 -- 블록 하나의 겉모습: 부위 색에 블록 고유색을 조금 섞고, 재질은 블록 것
@@ -154,29 +163,68 @@ function PlaneBuilder.cellHex(design: any, key: string, part: string): string
 	return if type(c) == "string" then c else design.colors[part]
 end
 
--- 경사 블록(WedgePart) 방향. 기본 WedgePart 는 비탈면이 앞(-z)·위를 본다.
--- 오른쪽 칸 기준 회전이고, 왼쪽 거울 칸은 좌우로 뒤집는다.
-local WEDGE_YAW: { [string]: number } = {
-	wf = 0, -- 비탈이 앞을 봄 (기수 끝, 날개 앞전)
-	wb = 180, -- 비탈이 뒤를 봄 (꼬리 끝)
-	wo = -90, -- 비탈이 바깥(오른쪽)을 봄 (날개 끝)
-	wfd = 0, -- 앞·아래 (기수 아래)
-	wbd = 180, -- 뒤·아래 (몸통 아래 뒤쪽)
+-- "모양:회전" 문자열 → 모양, 회전 (잘못되면 nil)
+function PlaneBuilder.parseShape(v: any): (string?, number?)
+	if type(v) ~= "string" then
+		return nil, nil
+	end
+	local id, r = string.match(v, "^(%a[%w]*):(%d)$")
+	local rot = tonumber(r)
+	if id and rot and Config.BlockShapes.byId[id] and rot < Config.BlockShapes.ROTATIONS then
+		return id, rot
+	end
+	return nil, nil
+end
+
+-- 칸의 모양: 에디터에서 바꾼 모양(cellShapes)이 있으면 그것, 없으면 틀에 정해진 모양, 그것도 없으면 사각형
+function PlaneBuilder.cellShape(design: any, key: string, frameDefault: string?): (string, number)
+	local id, rot = PlaneBuilder.parseShape(design.cellShapes and design.cellShapes[key])
+	if not id then
+		id, rot = PlaneBuilder.parseShape(frameDefault)
+	end
+	return id or "cube", rot or 0
+end
+
+-- 칸 이름 → 틀에 정해진 처음 모양 ("모양:회전" 또는 nil)
+function PlaneBuilder.frameShapeOf(design: any, key: string): string?
+	for _, p in PlaneBuilder.layout(design.frameId, design.parts) do
+		if p.key == key then
+			return p.shape
+		end
+	end
+	return nil
+end
+
+-- 모양 하나를 이루는 조각들 (칸 가운데 기준, 회전 전). { size(칸 비율), offset(칸 비율), wedge }
+type Piece = { size: Vector3, offset: Vector3, wedge: boolean }
+local PIECES: { [string]: { Piece } } = {
+	cube = { { size = Vector3.new(1, 1, 1), offset = Vector3.zero, wedge = false } },
+	three4 = { { size = Vector3.new(1, 0.75, 1), offset = Vector3.new(0, -0.125, 0), wedge = false } },
+	half = { { size = Vector3.new(1, 0.5, 1), offset = Vector3.new(0, -0.25, 0), wedge = false } },
+	quarter = { { size = Vector3.new(1, 0.25, 1), offset = Vector3.new(0, -0.375, 0), wedge = false } },
+	wedge = { { size = Vector3.new(1, 1, 1), offset = Vector3.zero, wedge = true } }, -- 비탈이 앞(-z)·위
+	halfwedge = { { size = Vector3.new(1, 0.5, 1), offset = Vector3.new(0, -0.25, 0), wedge = true } },
+	stairs = { -- 앞이 낮고 뒤가 높은 두 단
+		{ size = Vector3.new(1, 0.5, 1), offset = Vector3.new(0, -0.25, 0), wedge = false },
+		{ size = Vector3.new(1, 0.5, 0.5), offset = Vector3.new(0, 0.25, 0.25), wedge = false },
+	},
+	stick = { { size = Vector3.new(0.35, 0.35, 1), offset = Vector3.zero, wedge = false } }, -- 앞뒤로 누운 막대
 }
 
-local function cellCFrame(placed: Placed, cell: number): CFrame
-	local cf = CFrame.new(placed.pos * cell)
-	local shape = placed.shape
-	if not shape or WEDGE_YAW[shape] == nil then
-		return cf
-	end
-	local yaw = WEDGE_YAW[shape]
-	if placed.mirror then
+-- 회전 번호 → 칸 회전. 왼쪽 거울 칸은 좌우로 뒤집는다.
+local function shapeRotation(id: string, rot: number, mirror: boolean): CFrame
+	local quarter = rot % 4
+	local yaw = quarter * 90
+	if mirror then
 		yaw = -yaw
 	end
-	cf *= CFrame.Angles(0, math.rad(yaw), 0)
-	if string.sub(shape, -1) == "d" then
-		cf *= CFrame.Angles(0, 0, math.pi) -- 뒤집어서 비탈이 아래를 보게
+	local cf = CFrame.Angles(0, math.rad(yaw), 0)
+	if rot >= 4 then
+		if id == "stick" then
+			cf *= CFrame.Angles(math.pi / 2, 0, 0) -- 세운 막대
+		else
+			cf *= CFrame.Angles(0, 0, math.pi) -- 뒤집기
+		end
 	end
 	return cf
 end
@@ -239,19 +287,30 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 	for _, placed in PlaneBuilder.layout(design.frameId, design.parts) do
 		local block = PlaneBuilder.blockAt(design, placed.key)
 		local color, material = PlaneBuilder.blockLook(block, PlaneBuilder.cellHex(design, placed.key, placed.part))
-		local isWedge = placed.shape ~= nil and WEDGE_YAW[placed.shape] ~= nil
-		local p = newPart("C_" .. placed.key, Vector3.new(cell, cell, cell), cellCFrame(placed, cell), color, material, if isWedge then "WedgePart" else nil)
-		p:SetAttribute("Cell", placed.key)
-		p:SetAttribute("Part", placed.part)
-		p:SetAttribute("BlockId", block.id)
-		if display then
-			p.CanCollide = true -- 위에 올라가 걸을 수 있게
-			if PlaneBuilder.isDefault(design, placed.key) then
-				p.Transparency = 0.45 -- 아직 기본 블록인 칸: 반투명
+		local shapeId, rot = PlaneBuilder.cellShape(design, placed.key, placed.shape)
+		local cellCf = CFrame.new(placed.pos * cell) * shapeRotation(shapeId, rot, placed.mirror)
+		local default = display and PlaneBuilder.isDefault(design, placed.key)
+		for i, piece in PIECES[shapeId] do
+			local p = newPart(
+				if i == 1 then "C_" .. placed.key else "C_" .. placed.key .. "_" .. i,
+				piece.size * cell,
+				cellCf * CFrame.new(piece.offset * cell),
+				color,
+				material,
+				if piece.wedge then "WedgePart" else nil
+			)
+			p:SetAttribute("Cell", placed.key)
+			p:SetAttribute("Part", placed.part)
+			p:SetAttribute("BlockId", block.id)
+			if display then
+				p.CanCollide = true -- 위에 올라가 걸을 수 있게
+				if default then
+					p.Transparency = 0.45 -- 아직 기본 블록인 칸: 반투명
+				end
 			end
+			p.Parent = model
+			attach(p)
 		end
-		p.Parent = model
-		attach(p)
 	end
 
 	-- 조종석: 칸 위에 얇게 얹는다 (전시용은 앉을 수 없는 평범한 부품)

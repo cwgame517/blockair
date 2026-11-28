@@ -35,7 +35,7 @@ local FUNCTIONS = {
 	"SellBlocks", -- 클라 → 서버 (허브): 블록 팔기 (블록 번호, 없으면 전부) → 결과
 	"BuyUpgrade", -- 클라 → 서버 (허브): 강화 한 단계 올리기 (항목 이름) → 결과
 	"GetEditor", -- 클라 → 서버 (허브): 에디터 상태 { design, slot, slots, inventory, level }
-	"EditPlane", -- 클라 → 서버 (허브): 비행기 고치기 { op = "cell"|"fill"|"paintCell"|"auto"|"clear"|"color"|"weapon"|"parts"|"slot", ... } → { ok, msg, warn, state }
+	"EditPlane", -- 클라 → 서버 (허브): 비행기 고치기 { op = "cell"|"fill"|"shape"|"paintCell"|"auto"|"clear"|"color"|"weapon"|"parts"|"slot", ... } → { ok, msg, warn, state }
 }
 
 local folder: Folder

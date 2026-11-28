@@ -240,6 +240,11 @@ local function apply(player: Player, data: any, op: any): (boolean, string?, boo
 		end
 		PlaneEdit.paintPart(design, op.part, op.hex)
 		return true
+	elseif kind == "shape" then
+		if type(op.key) ~= "string" or type(op.shape) ~= "string" then
+			return false
+		end
+		return PlaneEdit.setShape(design, op.key, op.shape)
 	elseif kind == "paintCell" then
 		-- hex 가 "" 이면 원래(부위) 색으로
 		if type(op.key) ~= "string" or type(op.hex) ~= "string" or (op.hex ~= "" and not PALETTE[op.hex]) then
