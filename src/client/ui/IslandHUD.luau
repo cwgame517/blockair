@@ -109,7 +109,7 @@ function IslandHUD.Mount(playerGui: Instance)
 	repairLabel.TextXAlignment = Enum.TextXAlignment.Center
 	repairBar = Widgets.bar(repairPanel, UDim2.fromOffset(216, 14), UDim2.fromOffset(12, 32), Color3.fromRGB(90, 220, 255))
 
-	toast = Widgets.label(gui, "", UDim2.fromOffset(520, 48), UDim2.new(0.5, -260, 0, 200), 26)
+	toast = Widgets.label(gui, "", UDim2.fromOffset(520, 48), UDim2.new(0.5, -260, 0, 240), 26)
 	toast.TextXAlignment = Enum.TextXAlignment.Center
 	toast.TextColor3 = Widgets.GOLD
 	toast.TextTransparency = 1

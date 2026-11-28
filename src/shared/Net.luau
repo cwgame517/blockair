@@ -22,6 +22,7 @@ local EVENTS = {
 	"CargoChanged", -- 서버 → 클라: 화물칸 { count, cap }
 	"MiningStats", -- 서버 → 클라: 내 폭탄 { radius(칸), reload(초), power(채굴력) }
 	"PlaneHp", -- 서버 → 주인: 내 비행기 HP (지금, 최대)
+	"RunResult", -- 서버 → 클라: 원정 결과 { mined, lost, deposited, coins, xp, levelFrom, levelTo }
 	"Hangar", -- 서버 → 클라 (섬): 격납고 일 ("deposit", 개수) | ("repairStart", 초) | ("repairStop") | ("repairDone")
 }
 

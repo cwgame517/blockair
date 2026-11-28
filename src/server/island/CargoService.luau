@@ -21,6 +21,7 @@ type Cargo = { count: number, items: { [number]: number }, box: BasePart?, weld:
 local DataService: any
 local PlaneService: any
 local ProgressService: any
+local ExpeditionService: any
 local cargo: { [Player]: Cargo } = {}
 
 local function stateOf(player: Player): Cargo
@@ -110,6 +111,17 @@ function CargoService:AddLoot(player: Player, items: { { number } })
 		table.insert(result, { idx, id, ok })
 	end
 	Net.event("BlockLoot"):FireClient(player, result)
+	local mined = 0
+	for _, r in result do
+		if r[3] then
+			mined += 1
+		end
+	end
+	ExpeditionService:AddStat(player, "mined", mined)
+	ExpeditionService:AddStat(player, "coins", coins)
+	if lost then
+		ExpeditionService:AddStat(player, "lost", #result - mined)
+	end
 	if coins > 0 then
 		ProgressService:AddCoins(player, coins)
 	end
@@ -148,6 +160,7 @@ function CargoService:Init(services)
 	DataService = services.DataService
 	PlaneService = services.PlaneService
 	ProgressService = services.ProgressService
+	ExpeditionService = services.ExpeditionService
 end
 
 function CargoService:Start()

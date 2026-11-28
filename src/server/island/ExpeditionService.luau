@@ -1,9 +1,11 @@
 --!strict
 -- 원정 진행. 섬에 도착하면 바로 비행기에 태우고, "허브로" 버튼으로 돌아가기
 -- (맡기지 않은 화물이 있으면 한 번 경고).
--- (15분 타이머·섬 붕괴·보상은 뒤 단계에서)
+-- 한 판 기록(캔 블록·맡긴 블록·코인·XP·레벨)을 모아 두었다가, 돌아갈 때 저장 데이터 lastRun 에 적는다
+-- → 허브가 결과 화면으로 보여 준다. (15분 타이머·섬 붕괴·완주 보상은 뒤 단계에서)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 
@@ -19,6 +21,44 @@ local TravelService: any
 local CargoService: any
 local lastHome: { [Player]: number } = {}
 local warnedAt: { [Player]: number } = {}
+
+type Run = { mined: number, lost: number, deposited: number, coins: number, xp: number, levelFrom: number }
+local runs: { [Player]: Run } = {}
+
+-- 한 판 기록에 더하기 (CargoService·HangarService 가 부름)
+function ExpeditionService:AddStat(player: Player, key: string, n: number)
+	local run = runs[player] :: any
+	if run and n ~= 0 then
+		run[key] += n
+	end
+end
+
+-- 지금까지의 결과 (맡기지 않은 화물은 사라진 것으로 센다)
+local function resultOf(player: Player): any?
+	local run = runs[player]
+	local data = DataService:Get(player)
+	if not run or not data then
+		return nil
+	end
+	return {
+		mined = run.mined,
+		lost = run.lost + CargoService:GetCount(player),
+		deposited = run.deposited,
+		coins = run.coins,
+		xp = run.xp,
+		levelFrom = run.levelFrom,
+		levelTo = data.level,
+	}
+end
+
+-- 돌아가기 직전(또는 나가기 직전): 결과를 저장 데이터에 적어 허브가 보여 주게 한다
+local function writeResult(player: Player)
+	local data = DataService:Get(player)
+	local result = resultOf(player)
+	if data and result and result.mined > 0 then
+		data.lastRun = result
+	end
+end
 
 local function onCharacter(player: Player, char: Model)
 	char:WaitForChild("HumanoidRootPart", 10)
@@ -63,9 +103,23 @@ function ExpeditionService:Start()
 		end
 		lastHome[player] = now
 		warnedAt[player] = nil
+		if RunService:IsStudio() then
+			-- Studio 에서는 이동이 안 되니 결과 화면만 미리 보여 준다
+			Net.event("RunResult"):FireClient(player, resultOf(player))
+		end
+		writeResult(player)
 		TravelService:Send(player, "hub")
 	end)
+	DataService.ProfileLoaded:Connect(function(player: Player, data: any)
+		runs[player] = { mined = 0, lost = 0, deposited = 0, coins = 0, xp = 0, levelFrom = data.level }
+	end)
+	DataService.PlayerLeaving:Connect(function(player: Player)
+		writeResult(player) -- 그냥 나가도 다음에 허브에서 결과를 본다
+	end)
 	Players.PlayerRemoving:Connect(function(player)
+		task.defer(function()
+			runs[player] = nil
+		end)
 		lastHome[player] = nil
 		warnedAt[player] = nil
 	end)

@@ -19,6 +19,8 @@ type State = { inside: boolean, repairStart: number? }
 local IslandService: any
 local PlaneService: any
 local CargoService: any
+local ProgressService: any
+local ExpeditionService: any
 local centers: { Vector3 } = {} -- 각 격납고 발판 윗면 가운데
 local states: { [Player]: State } = {}
 
@@ -157,7 +159,11 @@ local function tick()
 		if CargoService:GetCount(player) > 0 then
 			local n = CargoService:Deposit(player)
 			if n > 0 then
-				Net.event("Hangar"):FireClient(player, "deposit", n)
+				local xp = n * Config.Levels.XP_PER_DEPOSIT
+				Net.event("Hangar"):FireClient(player, "deposit", n, xp)
+				ProgressService:AddXp(player, xp)
+				ExpeditionService:AddStat(player, "deposited", n)
+				ExpeditionService:AddStat(player, "xp", xp)
 			end
 		end
 
@@ -186,6 +192,8 @@ function HangarService:Init(services)
 	IslandService = services.IslandService
 	PlaneService = services.PlaneService
 	CargoService = services.CargoService
+	ProgressService = services.ProgressService
+	ExpeditionService = services.ExpeditionService
 end
 
 function HangarService:Start()

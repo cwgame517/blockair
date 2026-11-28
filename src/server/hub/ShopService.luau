@@ -1,6 +1,7 @@
 --!strict
 -- 허브 격납고 메뉴: 창고에 맡긴 블록 팔기(블록 판매가 × 개수 = 코인), 코인으로 강화(화물칸·채굴 폭탄).
 -- 강화 규칙: 한 번에 한 단계, 레벨이 열어 준 단계까지만, 값은 코인. 서버가 모두 검사한다.
+-- 섬에서 돌아오면 원정 결과(저장 데이터 lastRun)를 결과 화면으로 한 번 보여 준다.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -132,6 +133,12 @@ function ShopService:Init(services)
 end
 
 function ShopService:Start()
+	DataService.ProfileLoaded:Connect(function(player: Player, data: any)
+		if type(data.lastRun) == "table" then
+			Net.event("RunResult"):FireClient(player, data.lastRun)
+			data.lastRun = false
+		end
+	end)
 	Net.func("GetHangar").OnServerInvoke = function(player: Player)
 		local data = DataService:Get(player)
 		return if data then snapshot(data) else nil

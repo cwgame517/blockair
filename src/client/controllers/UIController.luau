@@ -49,9 +49,9 @@ function UIController:Start()
 		Net.event("CargoChanged").OnClientEvent:Connect(function(c)
 			hud.SetCargo(c.count, c.cap)
 		end)
-		Net.event("Hangar").OnClientEvent:Connect(function(kind: string, value: number?)
+		Net.event("Hangar").OnClientEvent:Connect(function(kind: string, value: number?, xp: number?)
 			if kind == "deposit" then
-				hud.Toast(`+{value} 블록 보관됨!`)
+				hud.Toast(`+{value} 블록 보관됨!  +{xp or 0} XP`)
 			elseif kind == "repairStart" then
 				hud.StartRepair(value or 3)
 			elseif kind == "repairStop" then
@@ -80,6 +80,13 @@ function UIController:Start()
 			menu.SetCoins(stats.coins)
 		end)
 	end
+
+	-- 원정 결과 화면 (허브에 돌아왔을 때. Studio 섬에서는 허브로 버튼을 누르면 미리 보기)
+	local result = require(ui:WaitForChild("ResultPanel") :: ModuleScript) :: any
+	result.Mount(playerGui)
+	Net.event("RunResult").OnClientEvent:Connect(function(r)
+		result.Show(r)
+	end)
 
 	-- 비행기 HP (허브 화면은 아직 HP 막대가 없어서 무시)
 	Net.event("PlaneHp").OnClientEvent:Connect(function(hp: number, maxHp: number)
