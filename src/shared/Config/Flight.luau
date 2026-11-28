@@ -6,7 +6,7 @@ return {
 	DEFAULT_BLOCK = "wood", -- 빈 칸을 채우는 기본 블록 (Blocks 의 key)
 
 	-- 속도
-	BASE_MAX_SPEED = 110, -- 기준 무게일 때 최고 속도
+	BASE_MAX_SPEED = 100, -- 기준 무게(블록 무게 1 = 돌)일 때 최고 속도. 기본 나무 비행기는 가벼워서 약 125
 	MIN_SPEED = 35, -- 자동 전진 최저 속도 (멈춰서 떨어지지 않음)
 	ACCELERATION = 45, -- 1초에 바뀌는 속도
 	THROTTLE_RATE = 0.7, -- Shift/Ctrl 을 1초 누르면 바뀌는 속도 레버 (0~1)
@@ -19,10 +19,11 @@ return {
 	HOVER_BRAKE = 70, -- 멈출 때 1초에 줄어드는 속도
 	HOVER_CAMERA_PITCH = 40, -- 제자리 비행 중 카메라가 내려다보는 각도 (착탄 원이 잘 보이게)
 
-	-- 무게: 기준 무게 = 틀 칸 수 × 이 값. 가벼우면 빠르고 잘 돈다.
+	-- 무게: 기준 무게 = 칸 수 × 이 값. 가벼우면 빠르고 잘 돈다. (4단계: 블록 차이가 느껴지게 지수를 올림)
+	-- 나무(0.4)만 = ×1.25, 돌(1) = ×1, 철(2)만 = ×0.84
 	REF_WEIGHT_PER_CELL = 1,
-	WEIGHT_SPEED_EXP = 0.15,
-	WEIGHT_TURN_EXP = 0.2,
+	WEIGHT_SPEED_EXP = 0.25,
+	WEIGHT_TURN_EXP = 0.25,
 	SPEED_MUL_MIN = 0.75,
 	SPEED_MUL_MAX = 1.25,
 

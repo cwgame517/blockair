@@ -16,6 +16,7 @@ local ShopService = {}
 
 local DataService: any
 local ProgressService: any
+local EditorService: any
 local priceOf: { [number]: number } = {}
 local lastRequest: { [Player]: number } = {}
 
@@ -97,6 +98,7 @@ local function sell(player: Player, id: any)
 	end
 	if earned > 0 then
 		ProgressService:AddCoins(player, earned)
+		EditorService:Push(player) -- 에디터 단축바의 블록 개수도 맞춘다
 	end
 	return { ok = sold > 0, sold = sold, earned = earned, state = snapshot(data) }
 end
@@ -130,6 +132,7 @@ end
 function ShopService:Init(services)
 	DataService = services.DataService
 	ProgressService = services.ProgressService
+	EditorService = services.EditorService
 end
 
 function ShopService:Start()

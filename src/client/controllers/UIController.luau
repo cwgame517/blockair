@@ -12,10 +12,12 @@ local ui = script.Parent.Parent:WaitForChild("ui")
 local hud: any = nil
 local FlightController: any
 local MiningController: any
+local EditorController: any
 
 function UIController:Init(controllers)
 	FlightController = controllers.FlightController
 	MiningController = controllers.MiningController
+	EditorController = controllers.EditorController
 end
 
 function UIController:Start()
@@ -70,6 +72,18 @@ function UIController:Start()
 		end)
 		hud.OnHangar(function()
 			menu.Toggle()
+		end)
+		hud.OnEditor(function()
+			menu.Close()
+			task.spawn(function()
+				EditorController:GoToPad()
+			end)
+		end)
+		EditorController.ZoneChanged:Connect(function(editing: boolean)
+			hud.SetEditing(editing)
+			if editing then
+				menu.Close()
+			end
 		end)
 		FlightController.FlyingChanged:Connect(function(flying: boolean)
 			if flying then

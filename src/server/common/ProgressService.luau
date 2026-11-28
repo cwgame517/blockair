@@ -96,6 +96,17 @@ function ProgressService:AddXp(player: Player, amount: number)
 	push(player, data)
 end
 
+-- 레벨을 바로 정하기 (Studio 테스트 명령 /level 전용)
+function ProgressService:SetLevel(player: Player, level: number)
+	local data = DataService:Get(player)
+	if not data then
+		return
+	end
+	data.level = math.clamp(math.floor(level), 1, Config.Levels.MAX_LEVEL)
+	data.xp = 0
+	push(player, data)
+end
+
 function ProgressService:GetLevel(player: Player): number
 	local data = DataService:Get(player)
 	return if data then data.level else 1

@@ -24,6 +24,7 @@ local EVENTS = {
 	"PlaneHp", -- 서버 → 주인: 내 비행기 HP (지금, 최대)
 	"RunResult", -- 서버 → 클라: 원정 결과 { mined, lost, deposited, coins, xp, levelFrom, levelTo }
 	"Hangar", -- 서버 → 클라 (섬): 격납고 일 ("deposit", 개수) | ("repairStart", 초) | ("repairStop") | ("repairDone")
+	"EditorState", -- 서버 → 클라 (허브): 에디터 상태가 바뀜 (테스트 명령으로 블록을 받았을 때 등)
 }
 
 local FUNCTIONS = {
@@ -33,6 +34,8 @@ local FUNCTIONS = {
 	"GetHangar", -- 클라 → 서버 (허브): 창고 블록·강화 단계·코인·레벨
 	"SellBlocks", -- 클라 → 서버 (허브): 블록 팔기 (블록 번호, 없으면 전부) → 결과
 	"BuyUpgrade", -- 클라 → 서버 (허브): 강화 한 단계 올리기 (항목 이름) → 결과
+	"GetEditor", -- 클라 → 서버 (허브): 에디터 상태 { design, slot, slots, inventory, level }
+	"EditPlane", -- 클라 → 서버 (허브): 비행기 고치기 { op = "cell"|"fill"|"auto"|"clear"|"color"|"weapon"|"parts"|"slot", ... } → { ok, msg, warn, state }
 }
 
 local folder: Folder
