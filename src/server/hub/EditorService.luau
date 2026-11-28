@@ -20,6 +20,7 @@ local Shapes = Config.FrameShapes
 local EditorService = {}
 
 local DataService: any
+local ProgressService: any
 
 type Pad = {
 	index: number,
@@ -178,7 +179,7 @@ local function rebuild(player: Player)
 		pad.display = nil
 	end
 	local design = activeDesign(data)
-	local cell = Config.Flight.CELL_SIZE * Editor.DISPLAY_SCALE
+	local cell = PlaneBuilder.displayCellSize(design.frameId)
 	local model = PlaneBuilder.build(design, { cellSize = cell, display = true })
 	model.Name = "Display"
 	model:SetAttribute("OwnerId", player.UserId)
@@ -215,7 +216,17 @@ local function snapshot(player: Player, data: any)
 			table.insert(inv, { id = id, count = n })
 		end
 	end
+	-- 레벨이 모자란 블록은 잠금(lock = 쓸 수 있는 레벨)으로 보내고 맨 뒤로
+	for _, item in inv do
+		local need = Blocks.byId[item.id].unlockLevel
+		if need > data.level then
+			item.lock = need
+		end
+	end
 	table.sort(inv, function(a, b)
+		if (a.lock ~= nil) ~= (b.lock ~= nil) then
+			return a.lock == nil
+		end
 		return PlaneEdit.quality(a.id) > PlaneEdit.quality(b.id)
 	end)
 	return {
@@ -443,11 +454,36 @@ local function onEdit(player: Player, op: any)
 		return { ok = false, state = snapshot(player, data) }
 	end
 	lastEdit[player] = now
-	local ok, msg, warn = apply(player, data, op)
+	-- 레벨별 해금: 레벨이 모자란 블록은 비행기에 못 넣는다 (캐서 팔 수는 있음)
+	local block = if typeof(op.block) == "number" then Blocks.byId[op.block] else nil
+	if block and block.unlockLevel > data.level then
+		return { ok = false, msg = `{block.name}은 레벨 {block.unlockLevel}부터 쓸 수 있어요`, warn = true, state = snapshot(player, data) }
+	end
+	-- 편집하는 동안 창고에서 잠긴 블록을 빼 두었다가(자동 채우기·부위 교체가 쓰지 않게) 끝나면 되돌린다
+	local locked: { [string]: number } = {}
+	local usable: { [string]: number } = {}
+	for key, n in data.inventory do
+		local b = Blocks.byId[tonumber(key) or 0]
+		if b and b.unlockLevel > data.level then
+			locked[key] = n
+		else
+			usable[key] = n
+		end
+	end
+	data.inventory = usable
+	local okCall, ok, msg, isWarn = pcall(apply, player, data, op)
+	for key, n in locked do
+		usable[key] = (usable[key] or 0) + n
+	end
+	data.inventory = usable
+	if not okCall then
+		warn(`[EditorService] 편집 오류: {ok}`)
+		ok, msg, isWarn = false, nil, nil
+	end
 	if ok then
 		rebuild(player)
 	end
-	return { ok = ok, msg = msg, warn = warn, state = snapshot(player, data) }
+	return { ok = ok, msg = msg, warn = isWarn, state = snapshot(player, data) }
 end
 
 local function assign(player: Player)
@@ -496,6 +532,7 @@ end
 
 function EditorService:Init(services)
 	DataService = services.DataService
+	ProgressService = services.ProgressService
 end
 
 function EditorService:Start()
@@ -530,6 +567,11 @@ function EditorService:Start()
 			EditorService:Push(player)
 			Net.event("Notify"):FireClient(player, "자유틀이 열렸어요!")
 		end
+	end)
+
+	-- 레벨이 오르면 새로 열린 틀·블록이 에디터에 바로 보이게
+	ProgressService.LeveledUp:Connect(function(player: Player)
+		EditorService:Push(player)
 	end)
 
 	Net.func("GetEditor").OnServerInvoke = function(player: Player)

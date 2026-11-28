@@ -1,6 +1,7 @@
 --!strict
 -- 원정 섬 격납고 4곳: 섬 가장자리 바깥 동서남북에 섬 크기에 맞춰 놓는다.
--- 하는 일 세 가지: 화물 맡기기(빛나는 구역에 들어가면 바로), 무료 수리(구역 안에서 3초), 재출격 지점(스폰).
+-- 하는 일 네 가지: 화물 맡기기(빛나는 구역에 들어가면 바로), 무료 수리(구역 안에서 3초), 재출격 지점(스폰),
+-- 연료 최소량 무료 보충(탱크가 30% 아래면 30% 까지, 5단계).
 -- 착륙은 필요 없다. 날아서 들어가거나 제자리 비행으로 머물면 된다.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,6 +22,7 @@ local PlaneService: any
 local CargoService: any
 local ProgressService: any
 local ExpeditionService: any
+local FuelService: any
 local centers: { Vector3 } = {} -- 각 격납고 발판 윗면 가운데
 local states: { [Player]: State } = {}
 
@@ -167,6 +169,11 @@ local function tick()
 			end
 		end
 
+		-- 연료: 최소량까지 무료로 (갇히지 않게)
+		if FuelService:RefillTo(player, Config.Fuel.HANGAR_MIN) then
+			Net.event("Hangar"):FireClient(player, "refuel", math.floor(Config.Fuel.HANGAR_MIN * 100 + 0.5))
+		end
+
 		-- 수리: HP 가 덜 찼고, 맞은 지 5초가 지났으면 3초 뒤 가득
 		local hp, maxHp, lastHit = PlaneService:GetHp(player)
 		if not hp or not maxHp or not lastHit or hp >= maxHp then
@@ -194,6 +201,7 @@ function HangarService:Init(services)
 	CargoService = services.CargoService
 	ProgressService = services.ProgressService
 	ExpeditionService = services.ExpeditionService
+	FuelService = services.FuelService
 end
 
 function HangarService:Start()

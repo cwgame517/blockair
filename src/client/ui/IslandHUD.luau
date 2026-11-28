@@ -1,8 +1,10 @@
 --!strict
--- 하늘 섬 UI: 레벨·코인, 화물칸 게이지("화물 32/50"), 비행기 HP, 격납고 수리 막대, 알림,
+-- 하늘 섬 UI: 레벨·코인, 화물칸 게이지("화물 32/50"), 비행기 HP, 연료(5단계), 격납고 수리 막대, 알림,
 -- 내려 있을 때 "비행기 타기"·"허브로" 버튼, 날 때 폭탄 버튼(재장전 표시). 디자인은 8단계에서 다듬는다.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Widgets = require(script.Parent.components.Widgets)
 
 local IslandHUD = {}
@@ -19,6 +21,9 @@ local cargoBar: { set: (number) -> (), fill: Frame }
 local hpPanel: Frame
 local hpLabel: TextLabel
 local hpBar: { set: (number) -> (), fill: Frame }
+local fuelPanel: Frame
+local fuelLabel: TextLabel
+local fuelBar: { set: (number) -> (), fill: Frame }
 local repairPanel: Frame
 local repairBar: { set: (number) -> (), fill: Frame }
 local repairTween: Tween? = nil
@@ -95,6 +100,19 @@ function IslandHUD.Mount(playerGui: Instance)
 	hpLabel = Widgets.label(hpPanel, "HP", UDim2.fromOffset(90, 30), UDim2.fromOffset(12, 0), 14)
 	hpBar = Widgets.bar(hpPanel, UDim2.fromOffset(150, 12), UDim2.fromOffset(98, 9), Color3.fromRGB(90, 210, 110))
 
+	-- 그 아래: 연료 (날 때만). "연료 63%  저장 +40%"
+	fuelPanel = Instance.new("Frame")
+	fuelPanel.Size = UDim2.fromOffset(260, 30)
+	fuelPanel.AnchorPoint = Vector2.new(0.5, 0)
+	fuelPanel.Position = UDim2.new(0.5, 0, 0, 186)
+	fuelPanel.BackgroundColor3 = Widgets.PANEL
+	fuelPanel.BackgroundTransparency = 0.15
+	fuelPanel.Visible = false
+	fuelPanel.Parent = gui
+	Widgets.corner(fuelPanel, 10)
+	fuelLabel = Widgets.label(fuelPanel, "연료", UDim2.fromOffset(110, 30), UDim2.fromOffset(12, 0), 13)
+	fuelBar = Widgets.bar(fuelPanel, UDim2.fromOffset(130, 12), UDim2.fromOffset(118, 9), Color3.fromRGB(255, 170, 60))
+
 	-- 가운데: 격납고 수리 막대 (3초 동안 차오름)
 	repairPanel = Instance.new("Frame")
 	repairPanel.Size = UDim2.fromOffset(240, 54)
@@ -111,6 +129,8 @@ function IslandHUD.Mount(playerGui: Instance)
 
 	toast = Widgets.label(gui, "", UDim2.fromOffset(520, 48), UDim2.new(0.5, -260, 0, 240), 26)
 	toast.TextXAlignment = Enum.TextXAlignment.Center
+	toast.TextWrapped = true -- 레벨업 해금 문구처럼 긴 알림은 두 줄로
+	toast.Size = UDim2.fromOffset(520, 64)
 	toast.TextColor3 = Widgets.GOLD
 	toast.TextTransparency = 1
 	toast.TextStrokeTransparency = 1
@@ -187,6 +207,7 @@ function IslandHUD.SetFlying(flying: boolean)
 	buttons.Visible = not flying
 	bombButton.Visible = flying
 	hpPanel.Visible = flying
+	fuelPanel.Visible = flying
 	if not flying then
 		IslandHUD.StopRepair()
 	end
@@ -200,6 +221,20 @@ function IslandHUD.SetHp(hp: number, maxHp: number)
 		then Color3.fromRGB(90, 210, 110)
 		elseif ratio > 0.25 then Color3.fromRGB(240, 200, 60)
 		else RED
+end
+
+-- 연료: tank 0~1, reserve 저장분(탱크 몇 개 분량), gliding 활공 중
+function IslandHUD.SetFuel(tank: number, reserve: number, gliding: boolean)
+	local pct = math.floor(tank * 100 + 0.5)
+	local text = if gliding then "연료 0% 활공!" else `연료 {pct}%`
+	if reserve > 0 then
+		text ..= `  +{math.floor(reserve * 100 + 0.5)}%`
+	end
+	fuelLabel.Text = text
+	fuelBar.set(tank)
+	local low = tank < Config.Fuel.LOW_WARN
+	fuelBar.fill.BackgroundColor3 = if low then RED else Color3.fromRGB(255, 170, 60)
+	fuelLabel.TextColor3 = if gliding then RED else Color3.new(1, 1, 1)
 end
 
 -- 격납고 수리: 막대가 seconds 동안 차오른다

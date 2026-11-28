@@ -51,9 +51,14 @@ function UIController:Start()
 		Net.event("CargoChanged").OnClientEvent:Connect(function(c)
 			hud.SetCargo(c.count, c.cap)
 		end)
+		Net.event("Fuel").OnClientEvent:Connect(function(f)
+			hud.SetFuel(f.tank, f.reserve, f.gliding)
+		end)
 		Net.event("Hangar").OnClientEvent:Connect(function(kind: string, value: number?, xp: number?)
 			if kind == "deposit" then
-				hud.Toast(`+{value} 블록 보관됨!  +{xp or 0} XP`)
+				hud.Toast(if xp and xp > 0 then `+{value} 블록 보관됨!  +{xp} XP` else `+{value} 블록 보관됨!`)
+			elseif kind == "refuel" then
+				hud.Toast(`격납고에서 연료를 {value}% 까지 채웠어요`)
 			elseif kind == "repairStart" then
 				hud.StartRepair(value or 3)
 			elseif kind == "repairStop" then

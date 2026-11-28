@@ -62,6 +62,8 @@ function HubHUD.Mount(playerGui: Instance)
 
 	toast = Widgets.label(gui, "", UDim2.fromOffset(420, 48), UDim2.new(0.5, -210, 0, 140), 28)
 	toast.TextXAlignment = Enum.TextXAlignment.Center
+	toast.TextWrapped = true -- 레벨업 해금 문구처럼 긴 알림은 두 줄로
+	toast.Size = UDim2.fromOffset(420, 64)
 	toast.TextColor3 = Widgets.GOLD
 	toast.TextTransparency = 1
 

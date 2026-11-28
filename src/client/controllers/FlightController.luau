@@ -12,6 +12,7 @@ local FlightModel = require(ReplicatedStorage.Shared.FlightModel)
 local FlightHUD = require(script.Parent.Parent.ui.FlightHUD)
 
 local Flight = Config.Flight
+local Fuel = Config.Fuel
 local player = Players.LocalPlayer
 
 local FlightController = {}
@@ -147,7 +148,22 @@ local function start(plane: Model)
 		stats.maxSpeed = plane:GetAttribute("MaxSpeed") :: number? or stats.maxSpeed
 		stats.minSpeed = plane:GetAttribute("MinSpeed") :: number? or stats.minSpeed
 		local cmd = InputController:GetCommand(dt)
-		local orientation, velocity = FlightModel.step(state, cmd, stats, dt)
+		local orientation, velocity
+		if plane:GetAttribute("Gliding") == true then
+			-- 연료 0: 느린 활공. 속도 레버·제자리 비행이 안 되고, 올라갈 수 없이 천천히 내려간다
+			cmd.throttleSet = 0.5
+			cmd.throttleAxis = 0
+			cmd.move = 0
+			local glide: FlightModel.Stats = {
+				maxSpeed = Fuel.GLIDE_SPEED,
+				minSpeed = Fuel.GLIDE_SPEED,
+				turnRate = stats.turnRate * Fuel.GLIDE_TURN_MUL,
+			}
+			orientation, velocity = FlightModel.step(state, cmd, glide, dt)
+			velocity = Vector3.new(velocity.X, math.min(velocity.Y, 0) - Fuel.GLIDE_SINK, velocity.Z)
+		else
+			orientation, velocity = FlightModel.step(state, cmd, stats, dt)
+		end
 		velocity = avoid(s, velocity, dt)
 		move.VectorVelocity = velocity
 		steer.CFrame = orientation
@@ -191,7 +207,7 @@ local function start(plane: Model)
 		local down = FlightModel.direction(state.aimYaw, math.rad(-Flight.HOVER_CAMERA_PITCH))
 		local camAim = aim:Lerp(down, hoverBlend).Unit
 		return root.CFrame, camAim, math.clamp(ratio, 0, 1)
-	end)
+	end, plane:GetAttribute("CameraScale") :: number?)
 	FlightController.FlyingChanged:Fire(true)
 end
 

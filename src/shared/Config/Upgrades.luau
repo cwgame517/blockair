@@ -21,7 +21,8 @@ Upgrades.WEAPON_PVP_BONUS = { 0, 0.05, 0.10, 0.15, 0.20 }
 
 Upgrades.ORDER = { "cargo", "bombRadius", "bombReload", "bombPower", "missile", "cannon", "laser" }
 
--- 지금 허브 격납고 강화 메뉴에 보이는 항목 (무기 3종은 전투가 생기는 6단계에서 연다)
-Upgrades.OPEN = { "cargo", "bombRadius", "bombReload", "bombPower" }
+-- 허브 격납고 강화 메뉴에 보이는 항목 (5단계: 7항목 모두). 무기 3종은 지금 사 둘 수 있고, 효과는 무기가 생기는 6단계부터
+Upgrades.OPEN = Upgrades.ORDER
+Upgrades.WEAPON_ITEMS = { missile = true, cannon = true, laser = true }
 
 return Upgrades

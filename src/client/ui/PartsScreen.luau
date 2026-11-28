@@ -149,7 +149,9 @@ local function moveCamera()
 	local focusPart = if tab == "color" then nil else tab
 	local center = focusCenter(model, focusPart)
 	local view = CAMERA_VIEW[tab]
-	local dist = view.dist * c.cellSize / (Config.Flight.CELL_SIZE * Editor.DISPLAY_SCALE)
+	-- 큰 틀은 비행기 실제 크기(칸 수 × 칸 크기)에 맞춰 멀리서 본다
+	local extent = (Shapes.byId[c.state.design.frameId] :: any).extent or Shapes.SMALL_EXTENT
+	local dist = view.dist * (extent * c.cellSize) / (Shapes.SMALL_EXTENT * Config.Flight.CELL_SIZE * Editor.DISPLAY_SCALE)
 	local camPos = center + c.pivot:VectorToWorldSpace(view.dir.Unit) * dist
 	local camera = workspace.CurrentCamera
 	camera.CameraType = Enum.CameraType.Scriptable

@@ -10,6 +10,8 @@
 --   /level 5      레벨을 5로 (부위 교체 테스트)
 --   /freepass     (허브) 자유틀 게임패스를 가진 것처럼 켜기/끄기
 --   /allblocks 20 (허브) 36종 블록을 종류마다 20개씩 창고에 넣기 (에디터 테스트)
+--   /fuel 10      (섬) 연료 탱크를 10% 로 (0 이면 바로 활공)
+--   /reserve 50   (섬) 연료 저장분에 50% 더하기 (자동 충전 테스트)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -22,6 +24,7 @@ local DataService
 local PlaneService
 local MiningService
 local EditorService
+local FuelService
 
 -- 허브 에디터 화면이 바뀐 창고·레벨을 바로 보이게
 local function refreshEditor(player: Player)
@@ -99,6 +102,18 @@ local function onChat(player: Player, message: string)
 		PlaneService:Damage(player, if arg ~= "" then n else 300)
 		local hp, maxHp = PlaneService:GetHp(player)
 		print(`[Dev] {player.Name} HP {hp or 0}/{maxHp or 0}`)
+	elseif cmd == "fuel" or cmd == "reserve" then
+		if not FuelService then
+			print(`[Dev] /{cmd} 는 원정 섬에서만 됩니다`)
+			return
+		end
+		if cmd == "fuel" then
+			FuelService:SetTank(player, if arg ~= "" then n else 100)
+		else
+			FuelService:AddReserve(player, (if arg ~= "" then n else 50) / 100)
+		end
+		local tank, reserve = FuelService:Get(player)
+		print(`[Dev] {player.Name} 연료 {math.floor(tank * 100 + 0.5)}%, 저장 {math.floor(reserve * 100 + 0.5)}%`)
 	elseif cmd == "stats" then
 		local d = DataService:Get(player)
 		if d then
@@ -117,6 +132,7 @@ function DevService:Init(services)
 	PlaneService = services.PlaneService
 	MiningService = services.MiningService -- 섬에만 있음
 	EditorService = services.EditorService -- 허브에만 있음
+	FuelService = services.FuelService -- 섬에만 있음
 end
 
 function DevService:Start()

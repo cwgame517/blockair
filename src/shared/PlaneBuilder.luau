@@ -498,6 +498,7 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 	end
 
 	model:SetAttribute("FrameId", design.frameId)
+	model:SetAttribute("CameraScale", PlaneBuilder.cameraScale(design.frameId))
 	model:SetAttribute("Weapon", design.weapon)
 	if display then
 		return model
@@ -528,6 +529,23 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 	ao.Parent = root
 
 	return model
+end
+
+-- 허브 에디터 전시용 칸 크기. 큰 틀(중형~초대형)은 조립 자리(PAD_SIZE)에 들어오도록 칸을 줄인다.
+function PlaneBuilder.displayCellSize(frameId: string?): number
+	local editor = Config.Editor
+	local shape = shapeOf(frameId or Shapes.DEFAULT_DESIGN.frameId) :: any
+	local scale = editor.DISPLAY_SCALE
+	if not shape.free and shape.extent then
+		scale = math.min(scale, editor.DISPLAY_FIT / (shape.extent * Flight.CELL_SIZE))
+	end
+	return Flight.CELL_SIZE * scale
+end
+
+-- 비행 카메라 거리 배율: 소형 기본틀보다 큰 비행기는 그만큼 멀리서 본다
+function PlaneBuilder.cameraScale(frameId: string?): number
+	local shape = shapeOf(frameId or Shapes.DEFAULT_DESIGN.frameId) :: any
+	return math.max(1, (shape.extent or Shapes.SMALL_EXTENT) / Shapes.SMALL_EXTENT)
 end
 
 -- 칸 좌표의 가장 낮은 y (전시할 때 바닥에 맞추려고)
