@@ -15,4 +15,5 @@ return {
 	BlockLooks = require(script.BlockLooks),
 	Mining = require(script.Mining),
 	Places = require(script.Places),
+	Hangars = require(script.Hangars),
 }

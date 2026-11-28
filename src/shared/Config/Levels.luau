@@ -4,7 +4,8 @@ local Levels = {}
 
 Levels.MAX_LEVEL = 40
 Levels.EXPEDITION_BASE_XP = 300 -- 원정 1회 기본 XP
-Levels.EXPEDITION_XP_PER_LEVEL = 50 -- 레벨당 추가 XP
+Levels.EXPEDITION_XP_PER_LEVEL = 50 -- 레벨당 추가 XP (15분 타이머·섬 붕괴가 생기면 완주 보너스로 쓴다)
+Levels.XP_PER_DEPOSIT = 1 -- 격납고에 맡긴 블록 1개당 XP (지금 XP 를 얻는 길)
 
 -- 다음 레벨까지 필요한 XP = 100 × 레벨^1.5 를 10 단위로 반올림
 function Levels.xpToNext(level: number): number

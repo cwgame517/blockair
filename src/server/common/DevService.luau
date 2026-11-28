@@ -5,8 +5,13 @@
 --   /stats        내 레벨·코인 출력
 --   /speed 70     비행 속도를 기본의 70% 로 (10~300, 숫자 없이 쓰면 지금 값 출력)
 --   /power 5      (섬) 내 채굴력을 5로. 숫자 없이 쓰면 원래대로
+--   /give 100     창고(맡긴 블록)에 여러 가지 블록 100개 넣기 (팔기 테스트)
+--   /hurt 300     내 비행기 HP 300 깎기 (격납고 수리 테스트)
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
 
 local DevService = {}
 local ProgressService
@@ -39,10 +44,33 @@ local function onChat(player: Player, message: string)
 		MiningService:SetDevPower(player, if arg ~= "" then math.max(n, 0.1) else nil)
 		local _, _, power = MiningService:GetStats(player)
 		print(`[Dev] {player.Name} 채굴력 {power}`)
+	elseif cmd == "give" then
+		local d = DataService:Get(player)
+		if not d then
+			return
+		end
+		local count = if arg ~= "" then math.clamp(n, 1, 100000) else 100
+		local rng = Random.new()
+		local list = Config.Blocks.list
+		local pool = math.min(#list, 12) -- 앞쪽(흔한) 블록 위주
+		for _ = 1, count do
+			local b = list[rng:NextInteger(1, pool)]
+			local key = tostring(b.id)
+			d.inventory[key] = (d.inventory[key] or 0) + 1
+		end
+		print(`[Dev] {player.Name} 창고에 블록 {count}개`)
+	elseif cmd == "hurt" then
+		PlaneService:Damage(player, if arg ~= "" then n else 300)
+		local hp, maxHp = PlaneService:GetHp(player)
+		print(`[Dev] {player.Name} HP {hp or 0}/{maxHp or 0}`)
 	elseif cmd == "stats" then
 		local d = DataService:Get(player)
 		if d then
-			print(`[Dev] {player.Name}: 레벨 {d.level}, XP {d.xp}, 코인 {d.coins}`)
+			local blocks = 0
+			for _, k in d.inventory do
+				blocks += k
+			end
+			print(`[Dev] {player.Name}: 레벨 {d.level}, XP {d.xp}, 코인 {d.coins}, 창고 블록 {blocks}개`)
 		end
 	end
 end

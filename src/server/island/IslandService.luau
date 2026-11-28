@@ -26,6 +26,11 @@ function IslandService:GetGrid(): IslandGrid.Grid
 	return grid
 end
 
+-- 섬 지름 (칸)
+function IslandService:GetDiameter(): number
+	return diameter
+end
+
 -- 칸을 없애고 금 간 칸을 표시한 뒤 모두에게 알린다
 function IslandService:Apply(removedNow: { number }, damagedIdx: { number }, damagedStage: { number })
 	for _, idx in removedNow do
@@ -45,8 +50,8 @@ local function airspaceRadius(): number
 	return math.min(diameter * Islands.AIRSPACE_SCALE, Islands.AIRSPACE_MAX) * Islands.BLOCK_SIZE / 2
 end
 
--- 출발 발판: 섬 남쪽 바깥, 섬을 바라보는 방향
-local function buildSpawn()
+-- 기본 바닥판·스폰을 치운다. 스폰(재출격 지점)은 격납고 4곳에 HangarService 가 만든다.
+local function clearDefaults()
 	local baseplate = workspace:FindFirstChild("Baseplate")
 	if baseplate then
 		baseplate:Destroy()
@@ -56,27 +61,6 @@ local function buildSpawn()
 			d:Destroy()
 		end
 	end
-	local z = -(diameter / 2 * Islands.BLOCK_SIZE + 70)
-	local pos = Vector3.new(0, 30, z)
-	local pad = Instance.new("Part")
-	pad.Name = "LaunchPad"
-	pad.Size = Vector3.new(30, 2, 30)
-	pad.CFrame = CFrame.new(pos - Vector3.new(0, 1.5, 0))
-	pad.Anchored = true
-	pad.Color = Color3.fromRGB(70, 80, 95)
-	pad.Material = Enum.Material.DiamondPlate
-	pad.Parent = workspace
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "IslandSpawn"
-	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.CFrame = CFrame.lookAt(pos, pos + Vector3.zAxis) -- 섬 쪽(+z)을 본다
-	spawn.Anchored = true
-	spawn.Neutral = true
-	spawn.Duration = 0
-	spawn.Color = Color3.fromRGB(80, 170, 255)
-	spawn.Material = Enum.Material.SmoothPlastic
-	spawn.TopSurface = Enum.SurfaceType.Smooth
-	spawn.Parent = workspace
 end
 
 local function setupSky()
@@ -111,7 +95,7 @@ function IslandService:Init(_services)
 	ReplicatedStorage:SetAttribute("Ceiling", Islands.CEILING)
 	ReplicatedStorage:SetAttribute("Floor", Islands.FLOOR)
 
-	buildSpawn()
+	clearDefaults()
 	setupSky()
 end
 

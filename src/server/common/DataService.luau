@@ -32,6 +32,7 @@ local TEMPLATE = {
 	cosmetics = {},
 	settings = {},
 	stats = {},
+	lastRun = false, -- 섬에서 돌아올 때 허브 결과 화면에 보여 줄 원정 결과 (보여 준 뒤 false)
 }
 
 local store: DataStore? = nil

@@ -1,5 +1,5 @@
 --!strict
--- 허브 UI: 레벨·XP 바·코인, 비행기 타기·출격 버튼. (에디터 버튼은 4단계에서 붙인다)
+-- 허브 UI: 레벨·XP 바·코인, 비행기 타기·격납고·출격 버튼. (에디터 버튼은 4단계에서 붙인다)
 local TweenService = game:GetService("TweenService")
 
 local Widgets = require(script.Parent.components.Widgets)
@@ -15,6 +15,7 @@ local toast: TextLabel
 local buttons: Frame
 local flyCallback: (() -> ())? = nil
 local sortieCallback: (() -> ())? = nil
+local hangarCallback: (() -> ())? = nil
 
 local function button(parent: Instance, text: string, color: Color3, order: number): TextButton
 	local b = Instance.new("TextButton")
@@ -63,7 +64,7 @@ function HubHUD.Mount(playerGui: Instance)
 
 	-- 아래 가운데: 모바일의 기본 스틱(왼쪽)·점프 버튼(오른쪽)과 겹치지 않는 자리
 	buttons = Instance.new("Frame")
-	buttons.Size = UDim2.fromOffset(312, 50)
+	buttons.Size = UDim2.fromOffset(474, 50)
 	buttons.AnchorPoint = Vector2.new(0.5, 1)
 	buttons.Position = UDim2.new(0.5, 0, 1, -20)
 	buttons.BackgroundTransparency = 1
@@ -79,7 +80,12 @@ function HubHUD.Mount(playerGui: Instance)
 			flyCallback()
 		end
 	end)
-	button(buttons, "출격", Color3.fromRGB(230, 120, 50), 2).Activated:Connect(function()
+	button(buttons, "격납고", Color3.fromRGB(90, 100, 125), 2).Activated:Connect(function()
+		if hangarCallback then
+			hangarCallback()
+		end
+	end)
+	button(buttons, "출격", Color3.fromRGB(230, 120, 50), 3).Activated:Connect(function()
 		if sortieCallback then
 			sortieCallback()
 		end
@@ -94,6 +100,10 @@ end
 
 function HubHUD.OnSortie(fn: () -> ())
 	sortieCallback = fn
+end
+
+function HubHUD.OnHangar(fn: () -> ())
+	hangarCallback = fn
 end
 
 -- 비행 중에는 버튼을 숨긴다 (내리기는 F 키나 비행 화면의 버튼)

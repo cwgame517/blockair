@@ -1,6 +1,7 @@
 --!strict
 -- 플레이스 사이 이동 (허브 → 원정 섬, 섬 → 허브).
--- 이동 직전에 화물을 창고로 옮기고, 저장 데이터를 저장한 뒤 잠금을 풀어 다음 서버가 바로 불러오게 한다.
+-- 이동 직전에 저장 데이터를 저장한 뒤 잠금을 풀어 다음 서버가 바로 불러오게 한다.
+-- (섬에서 격납고에 맡기지 않은 화물은 가져가지 않는다)
 -- Studio 테스트에서는 텔레포트가 안 되므로 알림만 띄운다.
 local AssetService = game:GetService("AssetService")
 local Players = game:GetService("Players")
@@ -89,9 +90,6 @@ function TravelService:Send(player: Player, dest: string)
 	notify(player, if dest == "island" then "하늘 섬으로 출발!" else "허브로 돌아가요")
 
 	services.PlaneService:Despawn(player, false)
-	if services.CargoService then
-		services.CargoService:MoveToInventory(player)
-	end
 	services.DataService:SaveAndRelease(player)
 
 	local options = Instance.new("TeleportOptions")
