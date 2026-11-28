@@ -19,6 +19,7 @@ export type State = {
 	roll: number, -- 도, + 는 오른쪽으로 기울어짐
 	throttle: number, -- 0~1
 	speed: number,
+	hover: boolean, -- 속도 레버가 맨 아래: 제자리 비행 (블록 캐기)
 }
 
 export type Command = {
@@ -26,6 +27,7 @@ export type Command = {
 	pitch: number, -- 이번 프레임에 조준을 올릴 양 (라디안)
 	throttleAxis: number, -- -1~1, 누르고 있는 동안 레버가 움직임 (PC W/S)
 	throttleSet: number?, -- 0~1, 레버를 이 값으로 (모바일 슬라이더)
+	move: number?, -- -1~1, 제자리 비행 중 앞(+)·뒤(-)로 움직이기 (W/S, 스틱 위아래)
 }
 
 export type Stats = { maxSpeed: number, minSpeed: number, turnRate: number }
@@ -50,6 +52,7 @@ function FlightModel.newState(cf: CFrame, stats: Stats): State
 		roll = 0,
 		throttle = throttle,
 		speed = stats.minSpeed + (stats.maxSpeed - stats.minSpeed) * throttle,
+		hover = false,
 	}
 end
 
@@ -83,7 +86,35 @@ function FlightModel.step(state: State, cmd: Command, stats: Stats, dt: number):
 	else
 		state.throttle = math.clamp(state.throttle + cmd.throttleAxis * Flight.THROTTLE_RATE * dt, 0, 1)
 	end
-	local target = stats.minSpeed + (stats.maxSpeed - stats.minSpeed) * state.throttle
+	-- 레버 맨 아래: 제자리 비행. 수평을 잡고 멈춰 떠 있으며, 조준 좌우로 돌고 W/S(스틱 위아래)로 천천히 앞뒤 이동.
+	-- 높이는 그대로 (폭탄은 바로 아래로 떨어지므로 높이를 맞출 필요가 없다).
+	state.hover = state.throttle < Flight.HOVER_ZONE
+	if state.hover then
+		local brake = Flight.HOVER_BRAKE * dt
+		state.speed = math.max(0, state.speed - brake)
+		state.aimPitch += (0 - state.aimPitch) * math.min(1, 4 * dt)
+		local level = FlightModel.direction(state.aimYaw, 0)
+		local fwd = state.forward
+		local flatFwd = Vector3.new(fwd.X, 0, fwd.Z)
+		flatFwd = if flatFwd.Magnitude > 1e-4 then flatFwd.Unit else level
+		local angle = math.acos(math.clamp(flatFwd:Dot(level), -1, 1))
+		local maxStep = math.rad(Flight.HOVER_TURN_RATE) * dt
+		if angle <= maxStep then
+			fwd = level
+		else
+			local axis = if flatFwd:Cross(level).Y >= 0 then Vector3.yAxis else -Vector3.yAxis
+			fwd = (CFrame.fromAxisAngle(axis, maxStep) * flatFwd).Unit
+		end
+		state.forward = fwd
+		state.roll += (0 - state.roll) * math.min(1, Flight.BANK_SMOOTH * dt)
+		local move = math.clamp(cmd.move or 0, -1, 1) * Flight.HOVER_MOVE_SPEED
+		local orientation = CFrame.lookAt(Vector3.zero, fwd, Vector3.yAxis) * CFrame.Angles(0, 0, -math.rad(state.roll))
+		return orientation, fwd * (state.speed + move)
+	end
+
+	-- 레버 위쪽 구간을 최저~최고 속도에 맞춘다
+	local t = (state.throttle - Flight.HOVER_ZONE) / (1 - Flight.HOVER_ZONE)
+	local target = stats.minSpeed + (stats.maxSpeed - stats.minSpeed) * t
 	local accel = Flight.ACCELERATION * dt
 	state.speed += math.clamp(target - state.speed, -accel, accel)
 

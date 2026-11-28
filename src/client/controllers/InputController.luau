@@ -1,6 +1,6 @@
 --!strict
 -- PC 와 모바일 입력을 하나의 "비행 명령"(FlightModel.Command)으로 바꾼다.
---   PC  : 마우스 또는 W/A/S/D(방향키)로 조준, Shift/Ctrl 속도, F 타기/내리기
+--   PC  : 마우스 또는 W/A/S/D(방향키)로 조준, Shift/Ctrl 속도, F 타기/내리기, Space 채굴 폭탄(섬)
 --   모바일: 왼쪽 스틱으로 조준, 오른쪽 슬라이더로 속도 (자동 전진)
 --   PC 화면 스틱 모드: 모바일과 같은 화면 스틱을 마우스로 끈다 (마우스가 잠기지 않아 테스트가 편함)
 --     Studio 에서는 이 모드로 시작하고, M 키로 마우스 조준과 바꾼다.
@@ -20,10 +20,12 @@ local TouchControls = require(script.Parent.Parent.ui.TouchFlightControls)
 local InputController = {}
 InputController.ToggleRequested = Signal.new() -- F 키 또는 화면의 내리기 버튼
 InputController.ModeChanged = Signal.new() -- 마우스 조준 ↔ 화면 스틱
+InputController.BombPressed = Signal.new() -- 비행 중 Space (모바일은 화면의 폭탄 버튼)
 
 local flying = false
 local mobile = false
 local screenStick = false -- PC 에서 화면 스틱을 쓰는 중인지 (모바일은 항상 화면 스틱)
+local onIsland = ReplicatedStorage:GetAttribute("PlaceKind") == "island"
 
 local SINK_ACTION = "BlockAirFlightSink"
 local MOUSE_LOCK_STEP = "BlockAirMouseLock"
@@ -45,10 +47,12 @@ end
 function InputController:GetHint(): string?
 	if mobile then
 		return nil
-	elseif screenStick then
-		return "화면 스틱·WASD: 방향   Shift/Ctrl: 속도   M: 마우스 조준   F: 내리기"
 	end
-	return "마우스·WASD: 방향   Shift/Ctrl: 속도   M: 화면 스틱   F: 내리기"
+	local bomb = if onIsland then "   Space: 폭탄" else ""
+	if screenStick then
+		return "화면 스틱·WASD: 방향   Shift/Ctrl: 속도(맨 아래=정지)" .. bomb .. "   M: 마우스 조준   F: 내리기"
+	end
+	return "마우스·WASD: 방향   Shift/Ctrl: 속도(맨 아래=정지)" .. bomb .. "   M: 화면 스틱   F: 내리기"
 end
 
 local function lockMouse(on: boolean)
@@ -84,9 +88,12 @@ function InputController:SetFlying(on: boolean, throttle: number?)
 	flying = on
 	if on then
 		-- 모바일 기본 스틱·점프 버튼을 숨기고, 스페이스 점프로 내리지 않게 막는다
-		-- (조종석에서는 W/A/S/D 걷기가 원래 동작하지 않는다)
+		-- (조종석에서는 W/A/S/D 걷기가 원래 동작하지 않는다). 대신 Space 는 채굴 폭탄.
 		GuiService.TouchControlsEnabled = false
-		ContextActionService:BindActionAtPriority(SINK_ACTION, function()
+		ContextActionService:BindActionAtPriority(SINK_ACTION, function(_, state)
+			if state == Enum.UserInputState.Begin then
+				InputController.BombPressed:Fire()
+			end
 			return Enum.ContextActionResult.Sink
 		end, false, Enum.ContextActionPriority.High.Value + 10, Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
 		applyMode(throttle or Flight.START_THROTTLE)
@@ -108,6 +115,7 @@ function InputController:GetCommand(dt: number): any
 			pitch = stick.Y * rate,
 			throttleAxis = 0,
 			throttleSet = TouchControls.GetThrottle(),
+			move = stick.Y,
 		}
 	end
 
@@ -140,6 +148,7 @@ function InputController:GetCommand(dt: number): any
 			pitch = stick.Y * stickRate + up * rate,
 			throttleAxis = 0,
 			throttleSet = TouchControls.GetThrottle(),
+			move = math.clamp(stick.Y + up, -1, 1),
 		}
 	end
 
@@ -149,10 +158,14 @@ function InputController:GetCommand(dt: number): any
 		pitch = -delta.Y * Flight.MOUSE_SENSITIVITY + up * rate,
 		throttleAxis = faster,
 		throttleSet = nil,
+		move = up,
 	}
 end
 
 function InputController:Init(_controllers)
+	ReplicatedStorage:GetAttributeChangedSignal("PlaceKind"):Connect(function()
+		onIsland = ReplicatedStorage:GetAttribute("PlaceKind") == "island"
+	end)
 	mobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 	screenStick = RunService:IsStudio() -- Studio 에서는 화면 스틱으로 시작
 end

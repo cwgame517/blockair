@@ -4,23 +4,22 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage.Shared.Net)
+local getPlaceKind = require(script.Parent.Parent.util.PlaceKind)
 
 local UIController = {}
 
 local ui = script.Parent.Parent:WaitForChild("ui")
 local hud: any = nil
 local FlightController: any
+local MiningController: any
 
 function UIController:Init(controllers)
 	FlightController = controllers.FlightController
+	MiningController = controllers.MiningController
 end
 
 function UIController:Start()
-	local kind = ReplicatedStorage:GetAttribute("PlaceKind")
-	while kind == nil do
-		ReplicatedStorage:GetAttributeChangedSignal("PlaceKind"):Wait()
-		kind = ReplicatedStorage:GetAttribute("PlaceKind")
-	end
+	local kind = getPlaceKind()
 
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local screen = if kind == "island" then ui:WaitForChild("IslandHUD") else ui:WaitForChild("HubHUD")
@@ -28,20 +27,37 @@ function UIController:Start()
 	hud.Mount(playerGui)
 	hud.Show()
 
-	-- 허브 버튼 연결 (섬 화면에는 없음)
-	if hud.OnFly then
-		hud.OnFly(function()
-			FlightController:RequestToggle()
+	-- 두 화면 공통: 비행기 타기 버튼, 날 때 버튼 숨기기
+	hud.OnFly(function()
+		FlightController:RequestToggle()
+	end)
+	FlightController.FlyingChanged:Connect(function(flying: boolean)
+		hud.SetFlying(flying)
+	end)
+	hud.SetFlying(FlightController:IsFlying())
+
+	if kind == "island" then
+		hud.OnHome(function()
+			Net.event("GoHome"):FireServer()
 		end)
+		hud.OnBomb(function()
+			MiningController:Drop()
+		end)
+		MiningController.CooldownStarted:Connect(function(seconds: number)
+			hud.StartCooldown(seconds)
+		end)
+		Net.event("CargoChanged").OnClientEvent:Connect(function(c)
+			hud.SetCargo(c.count, c.cap)
+		end)
+	else
 		hud.OnSortie(function()
-			hud.Toast("출격은 다음 단계(하늘 섬)에서 열려요")
+			Net.event("Sortie"):FireServer()
 		end)
-		FlightController.FlyingChanged:Connect(function(flying: boolean)
-			hud.SetFlying(flying)
-		end)
-		hud.SetFlying(FlightController:IsFlying())
 	end
 
+	Net.event("Notify").OnClientEvent:Connect(function(text: string, warn: boolean?)
+		hud.Toast(text, warn)
+	end)
 	Net.event("ProfileLoaded").OnClientEvent:Connect(function(stats)
 		hud.SetStats(stats)
 	end)

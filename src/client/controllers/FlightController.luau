@@ -38,6 +38,12 @@ function FlightController:IsFlying(): boolean
 	return session ~= nil
 end
 
+-- 지금 타고 있는 내 비행기 (없으면 nil)
+function FlightController:GetPlane(): Model?
+	local s = session
+	return if s then s.plane else nil
+end
+
 -- 타기/내리기 버튼·F 키
 function FlightController:RequestToggle()
 	if requestPending then
@@ -65,18 +71,21 @@ local function avoid(s: Session, velocity: Vector3, dt: number): Vector3
 			end
 		end
 	end
-	-- 하늘 경계
+	-- 하늘 경계 (섬 서버는 자기 경계를 ReplicatedStorage 속성으로 알려 줌)
+	local radius = ReplicatedStorage:GetAttribute("WorldRadius") :: number? or Flight.WORLD_RADIUS
+	local ceiling = ReplicatedStorage:GetAttribute("Ceiling") :: number? or Flight.CEILING
+	local floor = ReplicatedStorage:GetAttribute("Floor") :: number? or Flight.FLOOR
 	local flat = Vector3.new(pos.X, 0, pos.Z)
-	if flat.Magnitude > Flight.WORLD_RADIUS then
+	if flat.Magnitude > radius then
 		local out = flat.Unit
 		local into = velocity:Dot(out)
 		if into > 0 then
 			velocity -= out * into
 		end
 	end
-	if pos.Y > Flight.CEILING and velocity.Y > 0 then
+	if pos.Y > ceiling and velocity.Y > 0 then
 		velocity = Vector3.new(velocity.X, 0, velocity.Z)
-	elseif pos.Y < Flight.FLOOR and velocity.Y < 0 then
+	elseif pos.Y < floor and velocity.Y < 0 then
 		velocity = Vector3.new(velocity.X, 0, velocity.Z)
 	end
 	return velocity
@@ -158,6 +167,8 @@ local function start(plane: Model)
 	InputController:SetFlying(true, state.throttle)
 	FlightHUD.SetHint(InputController:GetHint())
 	FlightHUD.Show()
+	local hoverBlend = 0 -- 제자리 비행일 때 카메라가 아래를 내려다보도록 (0~1, 부드럽게)
+	local lastT = os.clock()
 	CameraController:FollowPlane(function()
 		if not root.Parent then
 			return nil, Vector3.zero, 0
@@ -171,9 +182,15 @@ local function start(plane: Model)
 			local p, onScreen = camera:WorldToViewportPoint(root.Position + dir * Flight.AIM_MARK_DISTANCE)
 			return if onScreen then Vector2.new(p.X, p.Y) else nil
 		end
-		FlightHUD.SetMarks(toScreen(aim), toScreen(root.CFrame.LookVector))
-		FlightHUD.SetSpeed(state.speed, ratio)
-		return root.CFrame, aim, math.clamp(ratio, 0, 1)
+		FlightHUD.SetMarks(if state.hover then nil else toScreen(aim), toScreen(root.CFrame.LookVector))
+		FlightHUD.SetSpeed(state.speed, ratio, state.hover)
+		local now = os.clock()
+		local goal = if state.hover then 1 else 0
+		hoverBlend += (goal - hoverBlend) * math.min(1, 3 * (now - lastT))
+		lastT = now
+		local down = FlightModel.direction(state.aimYaw, math.rad(-Flight.HOVER_CAMERA_PITCH))
+		local camAim = aim:Lerp(down, hoverBlend).Unit
+		return root.CFrame, camAim, math.clamp(ratio, 0, 1)
 	end)
 	FlightController.FlyingChanged:Fire(true)
 end

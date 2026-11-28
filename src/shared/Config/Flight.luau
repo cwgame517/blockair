@@ -12,6 +12,13 @@ return {
 	THROTTLE_RATE = 0.7, -- Shift/Ctrl 을 1초 누르면 바뀌는 속도 레버 (0~1)
 	START_THROTTLE = 0.35,
 
+	-- 제자리 비행 (블록 캐기용): 속도 레버를 맨 아래(이 값 미만)로 내리면 드론처럼 멈춰 떠 있다
+	HOVER_ZONE = 0.06,
+	HOVER_MOVE_SPEED = 22, -- 제자리 비행 중 앞뒤(W/S·스틱 위아래)로 움직이는 속도
+	HOVER_TURN_RATE = 70, -- 제자리 비행 중 도는 속도 (도/초)
+	HOVER_BRAKE = 70, -- 멈출 때 1초에 줄어드는 속도
+	HOVER_CAMERA_PITCH = 40, -- 제자리 비행 중 카메라가 내려다보는 각도 (착탄 원이 잘 보이게)
+
 	-- 무게: 기준 무게 = 틀 칸 수 × 이 값. 가벼우면 빠르고 잘 돈다.
 	REF_WEIGHT_PER_CELL = 1,
 	WEIGHT_SPEED_EXP = 0.15,

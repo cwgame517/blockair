@@ -33,7 +33,7 @@ local throttle = 0
 local function setThrottle(v: number)
 	throttle = math.clamp(v, 0, 1)
 	fill.Size = UDim2.fromScale(1, throttle)
-	sliderLabel.Text = `{math.floor(throttle * 100 + 0.5)}%`
+	sliderLabel.Text = if throttle < Flight.HOVER_ZONE then "정지" else `{math.floor(throttle * 100 + 0.5)}%`
 end
 
 local function updateStick(pos: Vector3)
@@ -116,7 +116,7 @@ function TouchFlightControls.Mount(playerGui: Instance)
 	exit.Name = "Exit"
 	exit.Size = UDim2.fromOffset(110, 40)
 	exit.AnchorPoint = Vector2.new(0.5, 0)
-	exit.Position = UDim2.new(0.5, 0, 0, 100)
+	exit.Position = UDim2.new(0.5, 0, 0, 152) -- 위쪽 레벨·화물 표시 아래
 	exit.BackgroundColor3 = Color3.fromRGB(200, 70, 70)
 	exit.Font = Widgets.FONT
 	exit.TextSize = 18
