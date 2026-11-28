@@ -464,8 +464,8 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 		CFrame.new(bpos) * CFrame.Angles(0, math.rad(90), 0),
 		Color3.fromRGB(70, 74, 84),
 		Enum.Material.Metal
-	)
-	(booster :: Part).Shape = Enum.PartType.Cylinder
+	) :: Part
+	booster.Shape = Enum.PartType.Cylinder
 	booster.Parent = model
 	attach(booster)
 	local flame = newPart(
@@ -474,8 +474,8 @@ function PlaneBuilder.build(rawDesign: any, options: BuildOptions?): Model
 		CFrame.new(bpos + Vector3.new(0, 0, cell * 0.75)) * CFrame.Angles(0, math.rad(90), 0),
 		Color3.fromRGB(255, 150, 40),
 		Enum.Material.Neon
-	)
-	(flame :: Part).Shape = Enum.PartType.Cylinder
+	) :: Part
+	flame.Shape = Enum.PartType.Cylinder
 	flame.Parent = model
 	attach(flame)
 
