@@ -11,5 +11,4 @@ return {
 		respawnTimes = { 5, 8, 10 }, spawnInvincible = 3, noRespawnLast = 120,
 	},
 	HANGAR_REPAIR_DELAY = 3,
-	FUEL_AUTO_REFILL_BELOW = 0.2,
 }

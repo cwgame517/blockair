@@ -3,10 +3,12 @@
 -- (맡기지 않은 화물이 있으면 한 번 경고).
 -- 한 판 기록(캔 블록·맡긴 블록·코인·XP·레벨)을 모아 두었다가, 돌아갈 때 저장 데이터 lastRun 에 적는다
 -- → 허브가 결과 화면으로 보여 준다. (15분 타이머·섬 붕괴·완주 보상은 뒤 단계에서)
+-- 원정 XP(5단계): 돌아갈 때 (300 + 50×레벨) × 머문 시간/15분. 블록을 하나도 맡기지 않았으면 0.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 
 local ARRIVE_DELAY = 1.5 -- 캐릭터가 나타난 뒤 비행기에 태우기까지
@@ -19,11 +21,22 @@ local DataService: any
 local PlaneService: any
 local TravelService: any
 local CargoService: any
+local ProgressService: any
 local lastHome: { [Player]: number } = {}
 local warnedAt: { [Player]: number } = {}
 
-type Run = { mined: number, lost: number, deposited: number, coins: number, xp: number, levelFrom: number }
+type Run = {
+	mined: number, lost: number, deposited: number, coins: number, xp: number, levelFrom: number,
+	startedAt: number, awarded: boolean,
+}
 local runs: { [Player]: Run } = {}
+
+local function newRun(level: number): Run
+	return {
+		mined = 0, lost = 0, deposited = 0, coins = 0, xp = 0, levelFrom = level,
+		startedAt = os.clock(), awarded = false,
+	}
+end
 
 -- 한 판 기록에 더하기 (CargoService·HangarService 가 부름)
 function ExpeditionService:AddStat(player: Player, key: string, n: number)
@@ -51,8 +64,24 @@ local function resultOf(player: Player): any?
 	}
 end
 
+-- 원정 XP 주기 (한 판에 한 번)
+local function awardXp(player: Player)
+	local run = runs[player]
+	local data = DataService:Get(player)
+	if not run or not data or run.awarded or run.deposited <= 0 then
+		return
+	end
+	run.awarded = true
+	local xp = Config.Levels.expeditionXp(data.level, os.clock() - run.startedAt)
+	if xp > 0 then
+		ProgressService:AddXp(player, xp)
+		run.xp += xp
+	end
+end
+
 -- 돌아가기 직전(또는 나가기 직전): 결과를 저장 데이터에 적어 허브가 보여 주게 한다
 local function writeResult(player: Player)
+	awardXp(player)
 	local data = DataService:Get(player)
 	local result = resultOf(player)
 	if data and result and result.mined > 0 then
@@ -74,6 +103,7 @@ function ExpeditionService:Init(services)
 	PlaneService = services.PlaneService
 	TravelService = services.TravelService
 	CargoService = services.CargoService
+	ProgressService = services.ProgressService
 end
 
 function ExpeditionService:Start()
@@ -103,15 +133,23 @@ function ExpeditionService:Start()
 		end
 		lastHome[player] = now
 		warnedAt[player] = nil
+		awardXp(player)
 		if RunService:IsStudio() then
 			-- Studio 에서는 이동이 안 되니 결과 화면만 미리 보여 준다
 			Net.event("RunResult"):FireClient(player, resultOf(player))
 		end
 		writeResult(player)
 		TravelService:Send(player, "hub")
+		if RunService:IsStudio() then
+			-- Studio 는 이동하지 않고 남으니 여기서 새 원정을 시작한 것으로 친다 (원정 XP 를 다시 시험할 수 있게)
+			local data = DataService:Get(player)
+			if data then
+				runs[player] = newRun(data.level)
+			end
+		end
 	end)
 	DataService.ProfileLoaded:Connect(function(player: Player, data: any)
-		runs[player] = { mined = 0, lost = 0, deposited = 0, coins = 0, xp = 0, levelFrom = data.level }
+		runs[player] = newRun(data.level)
 	end)
 	DataService.PlayerLeaving:Connect(function(player: Player)
 		writeResult(player) -- 그냥 나가도 다음에 허브에서 결과를 본다

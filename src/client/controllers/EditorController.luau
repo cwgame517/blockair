@@ -237,7 +237,7 @@ local function openParts()
 		return
 	end
 	local display = pad:FindFirstChild("Display") :: Model?
-	local cell = Config.Flight.CELL_SIZE * Editor.DISPLAY_SCALE
+	local cell = PlaneBuilder.displayCellSize(state.design.frameId)
 	local pivot = if display then display:GetPivot() else CFrame.new(padCenter(pad))
 	Panel.Hide()
 	clearHover()

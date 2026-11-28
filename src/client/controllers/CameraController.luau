@@ -17,7 +17,9 @@ type Target = () -> (CFrame?, Vector3, number)
 
 local following = false
 
-function CameraController:FollowPlane(getTarget: Target)
+-- scale: 큰 비행기(중형~초대형)는 카메라를 그만큼 멀리 (기본 1)
+function CameraController:FollowPlane(getTarget: Target, scale: number?)
+	local k = math.max(scale or 1, 1)
 	local camera = workspace.CurrentCamera
 	camera.CameraType = Enum.CameraType.Scriptable
 	following = true
@@ -28,7 +30,7 @@ function CameraController:FollowPlane(getTarget: Target)
 			return
 		end
 		local focus = cf.Position
-		local pos = focus - aim * Flight.CAMERA_DISTANCE + Vector3.yAxis * Flight.CAMERA_HEIGHT
+		local pos = focus - aim * (Flight.CAMERA_DISTANCE * k) + Vector3.yAxis * (Flight.CAMERA_HEIGHT * k)
 		camera.CFrame = CFrame.lookAt(pos, focus + aim * Flight.CAMERA_LOOK_AHEAD)
 		camera.FieldOfView = Flight.CAMERA_FOV + Flight.CAMERA_FOV_BOOST * speedRatio
 	end)

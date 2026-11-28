@@ -1,6 +1,6 @@
 --!strict
 -- 화물칸: 캔 몸통 블록이 들어가는 곳. 가득 차면 더 못 담고 블록은 사라진다.
--- 보물(금광석·보석)은 화물칸 대신 바로 코인, 연료 블록은 연료(연료 기능은 다음 단계라 지금은 효과 없음).
+-- 보물(금광석·보석)은 화물칸 대신 바로 코인, 연료 블록(석탄·석유·우라늄)은 연료 저장분으로 (FuelService).
 -- 비행기 아래에 작은 상자가 매달려 차오를수록 커지고, 가득 차면 금빛이 된다 (남들도 보임).
 -- 격납고의 빛나는 구역에 들어가면 화물이 창고(저장 데이터 inventory)로 맡겨진다 (HangarService).
 -- 맡기지 않고 허브로 돌아가거나 게임을 나가면 화물은 사라진다.
@@ -22,6 +22,7 @@ local DataService: any
 local PlaneService: any
 local ProgressService: any
 local ExpeditionService: any
+local FuelService: any
 local cargo: { [Player]: Cargo } = {}
 
 local function stateOf(player: Player): Cargo
@@ -92,6 +93,7 @@ function CargoService:AddLoot(player: Player, items: { { number } })
 	local cap = CargoService:GetCap(player)
 	local result = {}
 	local coins = 0
+	local fuel = 0
 	local lost = false
 	for _, it in items do
 		local idx, id = it[1], it[2]
@@ -100,7 +102,7 @@ function CargoService:AddLoot(player: Player, items: { { number } })
 		if info and info.kind == "treasure" then
 			coins += info.coins or 0
 		elseif info and info.kind == "fuel" then
-			-- 연료 기능은 다음 단계. 지금은 모양만.
+			fuel += info.fuel or 0 -- 화물칸을 차지하지 않고 연료 저장분으로
 		elseif c.count < cap then
 			c.count += 1
 			c.items[id] = (c.items[id] or 0) + 1
@@ -124,6 +126,9 @@ function CargoService:AddLoot(player: Player, items: { { number } })
 	end
 	if coins > 0 then
 		ProgressService:AddCoins(player, coins)
+	end
+	if fuel > 0 then
+		FuelService:AddReserve(player, fuel)
 	end
 	if lost and os.clock() - c.warnedAt > FULL_WARN_INTERVAL then
 		c.warnedAt = os.clock()
@@ -161,6 +166,7 @@ function CargoService:Init(services)
 	PlaneService = services.PlaneService
 	ProgressService = services.ProgressService
 	ExpeditionService = services.ExpeditionService
+	FuelService = services.FuelService
 end
 
 function CargoService:Start()

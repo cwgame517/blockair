@@ -1,5 +1,5 @@
 --!strict
--- 허브 격납고 창: [창고] 맡긴 블록 팔기, [강화] 코인으로 화물칸·채굴 폭탄 올리기.
+-- 허브 격납고 창: [창고] 맡긴 블록 팔기, [강화] 코인으로 7항목(화물칸·폭탄 3종·무기 3종) 올리기.
 -- 서버가 모든 걸 검사하고 새 상태를 돌려주면 그대로 다시 그린다. 디자인은 8단계에서 다듬는다.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -75,6 +75,10 @@ end
 local function fmtValue(item: string, step: number): string
 	local def = Upgrades.ITEMS[item]
 	local v = def.values[step]
+	if def.unit == "%" then
+		-- 무기: "+25% (PvP +10%)"
+		return `+{math.floor(v * 100 + 0.5)}% (PvP +{math.floor(Upgrades.WEAPON_PVP_BONUS[step] * 100 + 0.5)}%)`
+	end
 	if string.sub(def.unit, -1) == "+" then
 		return `{def.unit}{v}` -- "채굴력 +2"
 	end
@@ -166,7 +170,12 @@ local function renderUpgrades()
 		local step = state.upgrades[item] or 1
 		local maxStep = #def.values
 		local f = row(i, 64)
-		Widgets.label(f, `{def.name}  {step}/{maxStep}`, UDim2.new(0.55, -12, 0, 26), UDim2.fromOffset(12, 6), 17)
+		local title = `{def.name}  {step}/{maxStep}`
+		if Upgrades.WEAPON_ITEMS[item] then
+			title ..= "  (무기는 6단계부터)"
+		end
+		local t = Widgets.label(f, title, UDim2.new(0.55, -12, 0, 26), UDim2.fromOffset(12, 6), 17)
+		t.TextScaled = true
 		local value = if step >= maxStep then fmtValue(item, step) else `{fmtValue(item, step)} → {fmtValue(item, step + 1)}`
 		local v = Widgets.label(f, value, UDim2.new(0.55, -12, 0, 22), UDim2.fromOffset(12, 34), 15)
 		v.TextColor3 = Color3.fromRGB(150, 220, 255)

@@ -25,6 +25,7 @@ local EVENTS = {
 	"RunResult", -- 서버 → 클라: 원정 결과 { mined, lost, deposited, coins, xp, levelFrom, levelTo }
 	"Hangar", -- 서버 → 클라 (섬): 격납고 일 ("deposit", 개수) | ("repairStart", 초) | ("repairStop") | ("repairDone")
 	"EditorState", -- 서버 → 클라 (허브): 에디터 상태가 바뀜 (테스트 명령으로 블록을 받았을 때 등)
+	"Fuel", -- 서버 → 주인 (섬): 연료 { tank(0~1), reserve(탱크 몇 개 분량), gliding }
 }
 
 local FUNCTIONS = {

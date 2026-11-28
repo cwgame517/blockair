@@ -10,6 +10,7 @@ return {
 
 	-- 조립 자리: 공항 섬 동쪽. 칸 크기 배율 (비행 중 칸 = Flight.CELL_SIZE)
 	DISPLAY_SCALE = 1.25,
+	DISPLAY_FIT = 38, -- 큰 틀(중형~초대형)은 전시 비행기 가장 긴 길이가 이 스터드 안에 들어오게 칸을 줄인다
 	PAD_SIZE = 40,
 	PAD_COLUMNS = 3,
 	PAD_ROWS = 4,

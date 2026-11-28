@@ -31,7 +31,7 @@ local modeButtons: { [string]: TextButton } = {}
 local weaponButtons: { [string]: TextButton } = {}
 local slotButtons: { TextButton } = {}
 local partsButton: TextButton
-local frameRow: Frame
+local frameRow: ScrollingFrame
 local frameButtons: { [string]: TextButton } = {}
 local flyButton: TextButton
 local heavyLabel: TextLabel
@@ -48,7 +48,7 @@ local buildModes: (boolean) -> ()
 local selectedBlock = 0
 local selectedColor = Editor.PALETTE[1]
 local selectedShape = "wedge"
-local inventory: { { id: number, count: number } } = {}
+local inventory: { { id: number, count: number, lock: number? } } = {}
 
 local function button(parent: Instance, text: string, color: Color3, size: UDim2, pos: UDim2?): TextButton
 	local b = Instance.new("TextButton")
@@ -188,6 +188,19 @@ local function renderHotbar()
 		local count = Widgets.label(b, `x{item.count}`, UDim2.new(1, -4, 0, 14), UDim2.fromOffset(2, 48), 12)
 		count.TextXAlignment = Enum.TextXAlignment.Center
 		count.TextColor3 = Color3.fromRGB(190, 210, 240)
+		local lock = item.lock
+		if lock then
+			-- 레벨이 모자란 블록: 어둡게 + "Lv 8" (캐서 팔 수는 있음)
+			b.BackgroundColor3 = Color3.fromRGB(30, 32, 40)
+			sw.BackgroundTransparency = 0.6
+			name.TextTransparency = 0.5
+			count.Text = `Lv {lock}`
+			count.TextColor3 = Color3.fromRGB(255, 120, 120)
+			b.Activated:Connect(function()
+				EditorPanel.Toast(`{if info then info.name else "이 블록"}은 레벨 {lock}부터 쓸 수 있어요`, true)
+			end)
+			continue
+		end
 		b.Activated:Connect(function()
 			selectedBlock = item.id
 			EditorPanel.BlockChosen:Fire(item.id)
@@ -376,10 +389,16 @@ function EditorPanel.Mount(playerGui: Instance)
 		end)
 	end
 
-	local frow = Instance.new("Frame")
+	-- 틀 버튼 줄: 등급이 늘어 (소형 기본·확장, 중형, 대형, 초대형, 자유틀) 옆으로 밀어서 본다
+	local frow = Instance.new("ScrollingFrame")
 	frow.Position = UDim2.fromOffset(12, 234)
-	frow.Size = UDim2.new(1, -24, 0, 30)
+	frow.Size = UDim2.new(1, -24, 0, 34)
 	frow.BackgroundTransparency = 1
+	frow.BorderSizePixel = 0
+	frow.ScrollBarThickness = 3
+	frow.ScrollingDirection = Enum.ScrollingDirection.X
+	frow.CanvasSize = UDim2.new()
+	frow.AutomaticCanvasSize = Enum.AutomaticSize.X
 	frow.Parent = side
 	hlist(frow, 4)
 	local fl = Widgets.label(frow, "틀", UDim2.fromOffset(24, 28), UDim2.new(), 14)
@@ -457,7 +476,8 @@ function EditorPanel.SetState(state: any)
 	end
 	-- 고른 블록이 다 떨어졌으면 그대로 두되(빼기 아님), 처음 열 때는 가장 좋은 블록을 고른다
 	if selectedBlock == -1 then
-		selectedBlock = if #inventory > 0 then inventory[1].id else 0
+		local first = inventory[1]
+		selectedBlock = if first and not first.lock then first.id else 0
 	end
 	for id, b in weaponButtons do
 		b.BackgroundColor3 = if state.design.weapon == id then Widgets.ACCENT else GRAY
@@ -465,12 +485,13 @@ function EditorPanel.SetState(state: any)
 	for i, b in slotButtons do
 		b.BackgroundColor3 = if state.slot == i then Widgets.ACCENT else GRAY
 	end
-	-- 틀 버튼 (기본틀·확장틀). 처음 받을 때 만든다
+	-- 틀 버튼 (기본틀·확장틀·중형·대형·초대형·자유틀). 처음 받을 때 만든다
 	for i, f in state.frames or {} do
 		local b = frameButtons[f.id]
 		if not b then
-			b = button(frameRow, f.short, GRAY, UDim2.fromOffset(74, 28))
+			b = button(frameRow, f.short, GRAY, UDim2.fromOffset(70, 28))
 			b.TextSize = 13
+			b.TextScaled = true
 			b.LayoutOrder = i
 			frameButtons[f.id] = b
 			b.Activated:Connect(function()

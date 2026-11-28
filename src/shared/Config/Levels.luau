@@ -3,9 +3,17 @@
 local Levels = {}
 
 Levels.MAX_LEVEL = 40
+-- 원정 XP (5단계): 원정을 마치고 돌아갈 때 (기본 + 레벨당 추가) × 머문 시간 비율(15분이면 100%)
+-- 격납고에 블록을 1개도 맡기지 않았으면 0 (가만히 있기 방지). 15분 타이머가 생기면(6단계) 완주 보상으로 바뀐다.
 Levels.EXPEDITION_BASE_XP = 300 -- 원정 1회 기본 XP
-Levels.EXPEDITION_XP_PER_LEVEL = 50 -- 레벨당 추가 XP (15분 타이머·섬 붕괴가 생기면 완주 보너스로 쓴다)
-Levels.XP_PER_DEPOSIT = 1 -- 격납고에 맡긴 블록 1개당 XP (지금 XP 를 얻는 길)
+Levels.EXPEDITION_XP_PER_LEVEL = 50 -- 레벨당 추가 XP
+Levels.EXPEDITION_FULL_TIME = 15 * 60 -- 이만큼 머물면 원정 XP 100% (초)
+Levels.XP_PER_DEPOSIT = 0 -- 격납고에 맡긴 블록 1개당 XP (3단계 임시 방식, 지금은 원정 XP 로 바꿔 0)
+
+function Levels.expeditionXp(level: number, seconds: number): number
+	local full = Levels.EXPEDITION_BASE_XP + Levels.EXPEDITION_XP_PER_LEVEL * level
+	return math.floor(full * math.clamp(seconds / Levels.EXPEDITION_FULL_TIME, 0, 1) + 0.5)
+end
 
 -- 다음 레벨까지 필요한 XP = 100 × 레벨^1.5 를 10 단위로 반올림
 function Levels.xpToNext(level: number): number

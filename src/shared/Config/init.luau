@@ -18,4 +18,5 @@ return {
 	Hangars = require(script.Hangars),
 	Editor = require(script.Editor),
 	BlockShapes = require(script.BlockShapes),
+	Fuel = require(script.Fuel),
 }

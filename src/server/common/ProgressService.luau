@@ -11,6 +11,25 @@ ProgressService.LeveledUp = Signal.new() -- (player, newLevel)
 
 local DataService
 
+-- 레벨업 알림 문구: 해금표 + 그 레벨에 새로 쓸 수 있는 블록
+local function unlockText(level: number): string?
+	local parts = {}
+	local unlock = Config.Levels.UNLOCKS[level]
+	if unlock then
+		table.insert(parts, unlock)
+	end
+	local names = {}
+	for _, b in Config.Blocks.list do
+		if b.unlockLevel == level then
+			table.insert(names, b.name)
+		end
+	end
+	if #names > 0 then
+		table.insert(parts, "새 블록: " .. table.concat(names, ", "))
+	end
+	return if #parts > 0 then table.concat(parts, " / ") else nil
+end
+
 local function summary(data: any)
 	return {
 		level = data.level,
@@ -87,7 +106,7 @@ function ProgressService:AddXp(player: Player, amount: number)
 	while data.level < Config.Levels.MAX_LEVEL and data.xp >= Config.Levels.xpToNext(data.level) do
 		data.xp -= Config.Levels.xpToNext(data.level)
 		data.level += 1
-		Net.event("LevelUp"):FireClient(player, data.level, Config.Levels.UNLOCKS[data.level])
+		Net.event("LevelUp"):FireClient(player, data.level, unlockText(data.level))
 		ProgressService.LeveledUp:Fire(player, data.level)
 	end
 	if data.level >= Config.Levels.MAX_LEVEL then
