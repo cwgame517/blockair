@@ -79,8 +79,8 @@ function FlightHUD.SetMarks(aim: Vector2?, nose: Vector2?)
 	end
 end
 
-function FlightHUD.SetSpeed(speed: number, ratio: number)
-	speedLabel.Text = `속도 {math.floor(speed + 0.5)}`
+function FlightHUD.SetSpeed(speed: number, ratio: number, hover: boolean?)
+	speedLabel.Text = if hover then "정지 (W/S·스틱: 앞뒤)" else `속도 {math.floor(speed + 0.5)}`
 	speedBar.set(ratio)
 end
 

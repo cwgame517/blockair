@@ -167,6 +167,8 @@ local function start(plane: Model)
 	InputController:SetFlying(true, state.throttle)
 	FlightHUD.SetHint(InputController:GetHint())
 	FlightHUD.Show()
+	local hoverBlend = 0 -- 제자리 비행일 때 카메라가 아래를 내려다보도록 (0~1, 부드럽게)
+	local lastT = os.clock()
 	CameraController:FollowPlane(function()
 		if not root.Parent then
 			return nil, Vector3.zero, 0
@@ -180,9 +182,15 @@ local function start(plane: Model)
 			local p, onScreen = camera:WorldToViewportPoint(root.Position + dir * Flight.AIM_MARK_DISTANCE)
 			return if onScreen then Vector2.new(p.X, p.Y) else nil
 		end
-		FlightHUD.SetMarks(toScreen(aim), toScreen(root.CFrame.LookVector))
-		FlightHUD.SetSpeed(state.speed, ratio)
-		return root.CFrame, aim, math.clamp(ratio, 0, 1)
+		FlightHUD.SetMarks(if state.hover then nil else toScreen(aim), toScreen(root.CFrame.LookVector))
+		FlightHUD.SetSpeed(state.speed, ratio, state.hover)
+		local now = os.clock()
+		local goal = if state.hover then 1 else 0
+		hoverBlend += (goal - hoverBlend) * math.min(1, 3 * (now - lastT))
+		lastT = now
+		local down = FlightModel.direction(state.aimYaw, math.rad(-Flight.HOVER_CAMERA_PITCH))
+		local camAim = aim:Lerp(down, hoverBlend).Unit
+		return root.CFrame, camAim, math.clamp(ratio, 0, 1)
 	end)
 	FlightController.FlyingChanged:Fire(true)
 end

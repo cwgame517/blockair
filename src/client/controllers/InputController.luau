@@ -50,9 +50,9 @@ function InputController:GetHint(): string?
 	end
 	local bomb = if onIsland then "   Space: 폭탄" else ""
 	if screenStick then
-		return "화면 스틱·WASD: 방향   Shift/Ctrl: 속도" .. bomb .. "   M: 마우스 조준   F: 내리기"
+		return "화면 스틱·WASD: 방향   Shift/Ctrl: 속도(맨 아래=정지)" .. bomb .. "   M: 마우스 조준   F: 내리기"
 	end
-	return "마우스·WASD: 방향   Shift/Ctrl: 속도" .. bomb .. "   M: 화면 스틱   F: 내리기"
+	return "마우스·WASD: 방향   Shift/Ctrl: 속도(맨 아래=정지)" .. bomb .. "   M: 화면 스틱   F: 내리기"
 end
 
 local function lockMouse(on: boolean)
@@ -115,6 +115,7 @@ function InputController:GetCommand(dt: number): any
 			pitch = stick.Y * rate,
 			throttleAxis = 0,
 			throttleSet = TouchControls.GetThrottle(),
+			move = stick.Y,
 		}
 	end
 
@@ -147,6 +148,7 @@ function InputController:GetCommand(dt: number): any
 			pitch = stick.Y * stickRate + up * rate,
 			throttleAxis = 0,
 			throttleSet = TouchControls.GetThrottle(),
+			move = math.clamp(stick.Y + up, -1, 1),
 		}
 	end
 
@@ -156,6 +158,7 @@ function InputController:GetCommand(dt: number): any
 		pitch = -delta.Y * Flight.MOUSE_SENSITIVITY + up * rate,
 		throttleAxis = faster,
 		throttleSet = nil,
+		move = up,
 	}
 end
 

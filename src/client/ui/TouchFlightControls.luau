@@ -33,7 +33,7 @@ local throttle = 0
 local function setThrottle(v: number)
 	throttle = math.clamp(v, 0, 1)
 	fill.Size = UDim2.fromScale(1, throttle)
-	sliderLabel.Text = `{math.floor(throttle * 100 + 0.5)}%`
+	sliderLabel.Text = if throttle < Flight.HOVER_ZONE then "정지" else `{math.floor(throttle * 100 + 0.5)}%`
 end
 
 local function updateStick(pos: Vector3)
